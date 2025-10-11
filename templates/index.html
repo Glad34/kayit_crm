@@ -79,7 +79,7 @@
                 <tbody>
                     {% for record in records %}{% if record.Aksiyonlar and record.Aksiyonlar != 'Belirtilmedi' %}
                     <tr>
-                        <td>{{ record.Hatırlatma_Tarihi.split(' ')[0] if record.Hatırlatma_Tarihi and ' ' in record.Hatırlatma_Tarihi else record.Hatırlatma_Tarihi }}</td>
+                        <td>{{ record.get('Hatırlatma_Tarihi', '').split(' ')[0] }}</td>
                         <td>{{ record.Aksiyonlar }}</td>
                         <td>{{ record.Müşteri_Adı or 'N/A' }}</td>
                     </tr>
