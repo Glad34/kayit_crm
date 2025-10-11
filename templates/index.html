@@ -216,7 +216,8 @@
                     headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' },
                     locale: 'tr',
                     buttonText: { today: 'Bugün', month: 'Ay', week: 'Hafta', list: 'Liste' },
-                    events: JSON.parse('{{ calendar_events | tojson | safe }}'),
+                    events: {{ calendar_events | tojson | safe }},
+                    
                     eventClick: function(info) {
                         document.getElementById('modal-title').innerText = info.event.title;
                         document.getElementById('modal-start').innerText = info.event.start ? new Date(info.event.start).toLocaleString('tr-TR', {dateStyle: 'long', timeStyle: 'short'}) : 'Belirtilmedi';
@@ -225,6 +226,7 @@
                     }
                 });
                 calendar.render();
+
                 const fullscreenBtn = document.getElementById('fullscreen-btn');
                 const calendarContainer = document.getElementById('calendar-container');
                 fullscreenBtn.addEventListener('click', function() {
