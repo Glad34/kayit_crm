@@ -27,29 +27,42 @@ try:
     # Render'a eklediğimiz ortam değişkenini (Environment Variable) oku
     google_creds_json_str = os.environ.get('GOOGLE_CREDENTIALS_JSON')
     
-    SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/calendar"]
+    # Vertex AI için gerekli olan "cloud-platform" yetkisini ekle
+    SCOPES = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive.file",
+        "https://www.googleapis.com/auth/calendar",
+        "https://www.googleapis.com/auth/cloud-platform" 
+    ]
 
     if google_creds_json_str:
         google_creds_dict = json.loads(google_creds_json_str)
-        # Ortam değişkenindeki bilgiden kimlik oluştur
+        # Ortam değişkenindeki bilgiden, tüm yetkileri içeren kimlik nesnesini oluştur
         creds = Credentials.from_service_account_info(google_creds_dict, scopes=SCOPES)
+        
+        # Vertex AI'ı da aynı kimlik bilgileriyle (hizmet hesabıyla) başlat
+        vertexai.init(project=PROJECT_ID, location=LOCATION, credentials=creds)
+        print("Vertex AI, hizmet hesabı kimlik bilgileriyle başarıyla başlatıldı.")
+        
+        # Diğer servisleri de bu kimlikle başlat
+        sheets_client = gspread.authorize(creds)
+        spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID)
+        worksheet = spreadsheet.sheet1
+        print("Google Sheets servisine başarıyla bağlanıldı.")
+        
+        calendar_service = build('calendar', 'v3', credentials=creds)
+        print("Google Calendar servisine başarıyla bağlanıldı.")
     else:
-        # Eğer bilgisayarda yerel olarak çalıştırıyorsak, dosyadan oku
-        print("UYARI: GOOGLE_CREDENTIALS_JSON ortam değişkeni bulunamadı. Yerel 'credentials.json' dosyası kullanılıyor.")
-        creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
-
-    # Google servislerini başlat
-    sheets_client = gspread.authorize(creds)
-    spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID) # <-- DÜZELTİLMİŞ SATIR
-    worksheet = spreadsheet.sheet1
-    print("Google Sheets servisine başarıyla bağlanıldı.")
-    
-    calendar_service = build('calendar', 'v3', credentials=creds)
-    print("Google Calendar servisine başarıyla bağlanıldı.")
-
-    # Vertex AI'ı başlat (Bu, gcloud login'e güvenir)
-    vertexai.init(project=PROJECT_ID, location=LOCATION)
-    print("Vertex AI başarıyla başlatıldı.")
+        # Bu kısım sadece bilgisayarınızda yerel testler için çalışır
+        print("UYARI: Ortam değişkeni bulunamadı. Yerel 'credentials.json' ve 'gcloud login' yöntemleri kullanılıyor.")
+        creds_file = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+        sheets_client = gspread.authorize(creds_file)
+        spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID)
+        worksheet = spreadsheet.sheet1
+        calendar_service = build('calendar', 'v3', credentials=creds_file)
+        # Yerel Vertex AI, 'gcloud auth application-default login' komutuna güvenir
+        vertexai.init(project=PROJECT_ID, location=LOCATION)
+        print("Tüm servisler yerel modda başarıyla başlatıldı.")
 
 except Exception as e:
     print(f"--- KRİTİK HATA: GOOGLE SERVİSLERİ BAŞLATILAMADI ---\nHATA: {e}\n---------------------------------")
