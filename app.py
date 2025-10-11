@@ -76,6 +76,7 @@ except Exception as e:
 
 # --- GEMINI PROMPT FONKSİYONU ---
 def get_gemini_prompt(transcript):
+    # Bu fonksiyonun içeriği, en son ve en detaylı haliyle
     return f"""
     SENARYO: Sen bir emlak danışmanı için veri yapılandırma asistanısın. Görevin, sana verilen serbest metni analiz ederek aşağıdaki kurallara harfiyen uyarak bir JSON formatında cevap vermektir.
     ## KESİN KURALLAR ##
@@ -138,18 +139,16 @@ def index():
     calendar_events = []
     if worksheet:
         try:
-            # E-Tablodan kayıtları çek
             all_data = worksheet.get_all_records()
             user_email = current_user.email
             user_records = [rec for rec in all_data if rec.get('Danışman_Eposta') == user_email]
             records = list(reversed(user_records))
             
-            # Google Takvim'den etkinlikleri çek
             if calendar_service:
-                now = datetime.utcnow().isoformat() + 'Z'
+                now_utc = datetime.utcnow().isoformat() + 'Z'
                 events_result = calendar_service.events().list(
-                    calendarId=CALENDAR_ID, timeMin=now,
-                    maxResults=100, singleEvents=True,
+                    calendarId=CALENDAR_ID, timeMin=now_utc,
+                    maxResults=250, singleEvents=True,
                     orderBy='startTime').execute()
                 events = events_result.get('items', [])
                 
@@ -230,6 +229,7 @@ def process_transcript():
         
         kayit_tarihi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         reminder_for_sheet = reminder_datetime_obj.strftime("%Y-%m-%d %H:%M") if reminder_datetime_obj else "Belirtilmedi"
+        
         row_to_insert = [
             current_user.email,
             structured_data.get("Kaynak", "Belirtilmedi"),
