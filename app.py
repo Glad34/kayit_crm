@@ -1,75 +1,92 @@
 import os
 import json
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
 
-# Gerekli Google kütüphaneleri
+# Kullanıcı Girişi için yeni kütüphaneler
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from authlib.integrations.flask_client import OAuth
+
+# Google Kütüphaneleri
 import vertexai
 from vertexai.generative_models import GenerativeModel
 import gspread
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
-# --- PROJE AYARLARI ---
+# --- UYGULAMA KURULUMU ---
+app = Flask(__name__)
+# Render'daki SECRET_KEY ortam değişkenini oku
+app.secret_key = os.environ.get('SECRET_KEY', 'yerel-test-icin-cok-gizli-bir-anahtar')
+
+# --- KULLANICI GİRİŞ SİSTEMİ (LOGIN MANAGER) KURULUMU ---
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login_page' # Giriş yapmamış kullanıcıyı /login_page sayfasına yönlendir
+
+# Basit bir kullanıcı sınıfı
+class User(UserMixin):
+    def __init__(self, id, name, email):
+        self.id = id
+        self.name = name
+        self.email = email
+
+# Kullanıcıları hafızada tutmak için basit bir sözlük
+users = {}
+
+@login_manager.user_loader
+def load_user(user_id):
+    return users.get(user_id)
+
+# --- OAUTH (GOOGLE İLE GİRİŞ) KURULUMU ---
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.environ.get('GOOGLE_CLIENT_ID'),
+    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
+    access_token_url='https://accounts.google.com/o/oauth2/token',
+    access_token_params=None,
+    authorize_url='https://accounts.google.com/o/oauth2/auth',
+    authorize_params=None,
+    api_base_url='https://www.googleapis.com/oauth2/v1/',
+    userinfo_endpoint='https://openidconnect.googleapis.com/v1.0/userinfo',
+    client_kwargs={'scope': 'openid email profile'},
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration'
+)
+
+# --- GOOGLE SERVİSLERİNİ BAŞLATMA ---
 PROJECT_ID = "masaustuotomasyon"
 LOCATION = "us-central1"
 SPREADSHEET_ID = "1xjdxkMXKe3iQjD9rosNb69CIo36JhHUCPM-4kYzzRBM"
 CALENDAR_ID = 'onurglad34@gmail.com' 
-
-# --- GÜVENLİ KİMLİK DOĞRULAMA VE SERVİSLERİ BAŞLATMA ---
 creds = None
 worksheet = None
 calendar_service = None
-
 try:
-    # Render'a eklediğimiz ortam değişkenini (Environment Variable) oku
     google_creds_json_str = os.environ.get('GOOGLE_CREDENTIALS_JSON')
-    
-    # Vertex AI için gerekli olan "cloud-platform" yetkisini ekle
-    SCOPES = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive.file",
-        "https://www.googleapis.com/auth/calendar",
-        "https://www.googleapis.com/auth/cloud-platform" 
-    ]
-
+    SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/cloud-platform"]
     if google_creds_json_str:
         google_creds_dict = json.loads(google_creds_json_str)
-        # Ortam değişkenindeki bilgiden, tüm yetkileri içeren kimlik nesnesini oluştur
         creds = Credentials.from_service_account_info(google_creds_dict, scopes=SCOPES)
-        
-        # Vertex AI'ı da aynı kimlik bilgileriyle (hizmet hesabıyla) başlat
         vertexai.init(project=PROJECT_ID, location=LOCATION, credentials=creds)
-        print("Vertex AI, hizmet hesabı kimlik bilgileriyle başarıyla başlatıldı.")
-        
-        # Diğer servisleri de bu kimlikle başlat
         sheets_client = gspread.authorize(creds)
         spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID)
         worksheet = spreadsheet.sheet1
-        print("Google Sheets servisine başarıyla bağlanıldı.")
-        
         calendar_service = build('calendar', 'v3', credentials=creds)
-        print("Google Calendar servisine başarıyla bağlanıldı.")
+        print("Tüm Google Servisleri (Render Modu) başarıyla başlatıldı.")
     else:
-        # Bu kısım sadece bilgisayarınızda yerel testler için çalışır
-        print("UYARI: Ortam değişkeni bulunamadı. Yerel 'credentials.json' ve 'gcloud login' yöntemleri kullanılıyor.")
+        print("UYARI: Ortam değişkeni bulunamadı. Yerel modda çalışılıyor.")
         creds_file = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
         sheets_client = gspread.authorize(creds_file)
         spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID)
         worksheet = spreadsheet.sheet1
         calendar_service = build('calendar', 'v3', credentials=creds_file)
-        # Yerel Vertex AI, 'gcloud auth application-default login' komutuna güvenir
         vertexai.init(project=PROJECT_ID, location=LOCATION)
-        print("Tüm servisler yerel modda başarıyla başlatıldı.")
-
+        print("Tüm servisler (Yerel Mod) başarıyla başlatıldı.")
 except Exception as e:
-    print(f"--- KRİTİK HATA: GOOGLE SERVİSLERİ BAŞLATILAMADI ---\nHATA: {e}\n---------------------------------")
-
-
-# Flask uygulamasını başlat
-app = Flask(__name__)
+    print(f"--- KRİTİK HATA: GOOGLE SERVİSLERİ BAŞLATILAMADI ---\nHATA: {e}")
 
 # --- GEMINI PROMPT FONKSİYONU ---
 def get_gemini_prompt(transcript):
@@ -96,32 +113,64 @@ def get_gemini_prompt(transcript):
     }}
     """
 
-# --- WEB SAYFASI ROTALARI (ROUTES) ---
+# --- GİRİŞ / ÇIKIŞ SAYFALARI (ROUTES) ---
+@app.route('/login_page')
+def login_page():
+    return render_template('login.html')
+
+@app.route('/login')
+def login():
+    redirect_uri = url_for('authorize', _external=True)
+    return google.authorize_redirect(redirect_uri)
+
+@app.route('/auth/callback')
+def authorize():
+    try:
+        token = google.authorize_access_token()
+        user_info = google.get('userinfo').json()
+        user_id = user_info['id']
+        user = User(id=user_id, name=user_info.get('name', 'İsimsiz'), email=user_info['email'])
+        users[user_id] = user
+        login_user(user)
+        return redirect(url_for('index'))
+    except Exception as e:
+        print(f"Giriş sırasında hata: {e}")
+        return redirect(url_for('login_page'))
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login_page'))
+
+# --- ANA UYGULAMA SAYFASI ---
 @app.route('/')
+@login_required
 def index():
     records = []
     if worksheet:
         try:
             all_data = worksheet.get_all_records()
-            records = list(reversed(all_data))
+            user_email = current_user.email
+            user_records = [rec for rec in all_data if rec.get('Danışman_Eposta') == user_email]
+            records = list(reversed(user_records))
         except Exception as e:
             print(f"E-Tablodan veri çekerken hata oluştu: {e}")
     return render_template('index.html', records=records)
 
+# --- VERİ İŞLEME ROTASI ---
 @app.route('/process', methods=['POST'])
+@login_required
 def process_transcript():
     try:
         data = request.get_json()
         transcript = data.get('transcript')
-
         model = GenerativeModel("gemini-2.5-pro")
         prompt = get_gemini_prompt(transcript)
         response = model.generate_content(prompt)
-        
         cleaned_response_text = response.text.replace("```json", "").replace("```", "").strip()
         structured_data = json.loads(cleaned_response_text)
         
-        # --- Tarih ve Saat İşleme Mantığı ---
         reminder_date_text = structured_data.get("Hatırlatma_Tarihi_Metni", "").lower()
         reminder_time_text = structured_data.get("Hatırlatma_Saati_Metni", "").lower()
         reminder_datetime_obj = None
@@ -161,7 +210,6 @@ def process_transcript():
                 except: hour, minute = 10, 0
             reminder_datetime_obj = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
-        # --- Google Takvim Entegrasyonu ---
         if reminder_datetime_obj and calendar_service:
             event_start_time = reminder_datetime_obj
             event_end_time = event_start_time + timedelta(hours=1)
@@ -173,10 +221,11 @@ def process_transcript():
             }
             calendar_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
         
-        # --- Google E-Tablo'ya Yazma ---
         kayit_tarihi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         reminder_for_sheet = reminder_datetime_obj.strftime("%Y-%m-%d %H:%M") if reminder_datetime_obj else "Belirtilmedi"
+        
         row_to_insert = [
+            current_user.email,
             structured_data.get("Kaynak", "Belirtilmedi"),
             structured_data.get("Müşteri_Adı", "Belirtilmedi"),
             structured_data.get("Telefon", "Belirtilmedi"),
@@ -208,7 +257,6 @@ def process_transcript():
         print(f"\n!!!! HATA !!!!\n{e}\n!!!!!!!!!!!!!!")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# Bu kısım, `gunicorn` sunucusu kullandığımız için Render'da çalışmaz,
-# ama bilgisayarınızda `python app.py` komutuyla test yapmanızı sağlar.
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Bu kısım sadece bilgisayarınızda `python app.py` komutuyla test yapmanızı sağlar.
+    app.run(ssl_context='adhoc', debug=True)
