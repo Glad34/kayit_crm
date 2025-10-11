@@ -1,7 +1,7 @@
 import os
 import json
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
 
@@ -18,13 +18,14 @@ from googleapiclient.discovery import build
 
 # --- UYGULAMA KURULUMU ---
 app = Flask(__name__)
-# Render'daki SECRET_KEY ortam değişkenini oku
 app.secret_key = os.environ.get('SECRET_KEY', 'yerel-test-icin-cok-gizli-bir-anahtar')
+# Oturum çerezi ayarlarını canlı sunucu (HTTPS) için güvenli hale getir
+app.config.update(SESSION_COOKIE_SECURE=True, SESSION_COOKIE_SAMESITE='None')
 
 # --- KULLANICI GİRİŞ SİSTEMİ (LOGIN MANAGER) KURULUMU ---
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login_page' # Giriş yapmamış kullanıcıyı /login_page sayfasına yönlendir
+login_manager.login_view = 'login_page'
 
 # Basit bir kullanıcı sınıfı
 class User(UserMixin):
@@ -32,8 +33,6 @@ class User(UserMixin):
         self.id = id
         self.name = name
         self.email = email
-
-# Kullanıcıları hafızada tutmak için basit bir sözlük
 users = {}
 
 @login_manager.user_loader
@@ -127,6 +126,8 @@ def login():
 def authorize():
     try:
         token = google.authorize_access_token()
+        # Token'ı session'a kaydetmek, bazı ortamlarda Authlib için gereklidir.
+        session['user_token'] = token
         user_info = google.get('userinfo').json()
         user_id = user_info['id']
         user = User(id=user_id, name=user_info.get('name', 'İsimsiz'), email=user_info['email'])
@@ -258,5 +259,4 @@ def process_transcript():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
-    # Bu kısım sadece bilgisayarınızda `python app.py` komutuyla test yapmanızı sağlar.
-    app.run(ssl_context='adhoc', debug=True)
+    app.run(debug=True)
