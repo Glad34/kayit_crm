@@ -14,7 +14,6 @@ import vertexai
 from vertexai.generative_models import GenerativeModel
 import gspread
 from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
 
 # --- UYGULAMA KURULUMU ---
 app = Flask(__name__)
@@ -53,13 +52,11 @@ google = oauth.register(
 PROJECT_ID = "masaustuotomasyon"
 LOCATION = "us-central1"
 SPREADSHEET_ID = "1xjdxkMXKe3iQjD9rosNb69CIo36JhHUCPM-4kYzzRBM"
-CALENDAR_ID = 'onurglad34@gmail.com' 
 creds = None
 worksheet = None
-calendar_service = None
 try:
     google_creds_json_str = os.environ.get('GOOGLE_CREDENTIALS_JSON')
-    SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/cloud-platform"]
+    SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/cloud-platform"]
     if google_creds_json_str:
         google_creds_dict = json.loads(google_creds_json_str)
         creds = Credentials.from_service_account_info(google_creds_dict, scopes=SCOPES)
@@ -67,8 +64,7 @@ try:
         sheets_client = gspread.authorize(creds)
         spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID)
         worksheet = spreadsheet.sheet1
-        calendar_service = build('calendar', 'v3', credentials=creds)
-        print("Tüm Google Servisleri (Render Modu) başarıyla başlatıldı.")
+        print("Google Sheets ve Vertex AI (Render Modu) başarıyla başlatıldı.")
     else:
         print("UYARI: Ortam değişkeni bulunamadı. Yerel modda çalışılıyor.")
 except Exception as e:
@@ -76,7 +72,6 @@ except Exception as e:
 
 # --- GEMINI PROMPT FONKSİYONU ---
 def get_gemini_prompt(transcript):
-    # Bu fonksiyonun içeriği, en son ve en detaylı haliyle
     return f"""
     SENARYO: Sen bir emlak danışmanı için veri yapılandırma asistanısın. Görevin, sana verilen serbest metni analiz ederek aşağıdaki kurallara harfiyen uyarak bir JSON formatında cevap vermektir.
     ## KESİN KURALLAR ##
@@ -144,23 +139,16 @@ def index():
             user_records = [rec for rec in all_data if rec.get('Danışman_Eposta') == user_email]
             records = list(reversed(user_records))
             
-            if calendar_service:
-                now_utc = datetime.utcnow().isoformat() + 'Z'
-                events_result = calendar_service.events().list(
-                    calendarId=CALENDAR_ID, timeMin=now_utc,
-                    maxResults=250, singleEvents=True,
-                    orderBy='startTime').execute()
-                events = events_result.get('items', [])
-                
-                for event in events:
+            # Takvim etkinliklerini Google Takvim yerine E-Tablo'dan alıyoruz
+            for record in user_records:
+                if record.get('Aksiyonlar') and record.get('Hatırlatma_Tarihi') and record.get('Hatırlatma_Tarihi') != 'Belirtilmedi':
                     calendar_events.append({
-                        'title': event.get('summary', 'İsimsiz Etkinlik'),
-                        'start': event['start'].get('dateTime', event['start'].get('date')),
-                        'end': event['end'].get('dateTime', event['end'].get('date')),
-                        'description': event.get('description', '')
+                        'title': record['Aksiyonlar'],
+                        'start': record['Hatırlatma_Tarihi'],
+                        'description': f"Müşteri: {record.get('Müşteri_Adı', 'N/A')}\nTelefon: {record.get('Telefon', 'N/A')}\n\nNot: {record.get('Notlar', 'Yok')}"
                     })
         except Exception as e:
-            print(f"Veri çekerken hata oluştu: {e}")
+            print(f"E-Tablodan veri çekerken hata oluştu: {e}")
             
     return render_template('index.html', records=records, calendar_events=json.dumps(calendar_events))
 
@@ -216,17 +204,6 @@ def process_transcript():
                 except: hour, minute = 10, 0
             reminder_datetime_obj = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
-        if reminder_datetime_obj and calendar_service:
-            event_start_time = reminder_datetime_obj
-            event_end_time = event_start_time + timedelta(hours=1)
-            event = {
-                'summary': structured_data.get("Aksiyonlar", "İsimsiz Görev"),
-                'description': f"Müşteri: {structured_data.get('Müşteri_Adı', 'Belirtilmedi')}\nTelefon: {structured_data.get('Telefon', 'Belirtilmedi')}\n\nNotlar:\n{transcript}",
-                'start': {'dateTime': event_start_time.isoformat(), 'timeZone': 'Europe/Istanbul'},
-                'end': {'dateTime': event_end_time.isoformat(), 'timeZone': 'Europe/Istanbul'},
-            }
-            calendar_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
-        
         kayit_tarihi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         reminder_for_sheet = reminder_datetime_obj.strftime("%Y-%m-%d %H:%M") if reminder_datetime_obj else "Belirtilmedi"
         
