@@ -120,7 +120,6 @@
             <span class="close">&times;</span>
             <h3 id="modal-title"></h3>
             <p><strong>Başlangıç:</strong> <span id="modal-start"></span></p>
-            <p><strong>Bitiş:</strong> <span id="modal-end"></span></p>
             <p><strong>Açıklama:</strong></p>
             <pre id="modal-desc" style="white-space: pre-wrap; font-family: inherit;"></pre>
         </div>
@@ -134,11 +133,8 @@
                 const td = tr[i].getElementsByTagName("td")[columnIndex];
                 if (td) {
                     const txtValue = td.textContent || td.innerText;
-                    if (txtValue.toUpperCase().indexOf(filter) > -1) {
-                        tr[i].style.display = "";
-                    } else {
-                        tr[i].style.display = "none";
-                    }
+                    if (txtValue.toUpperCase().indexOf(filter) > -1) { tr[i].style.display = ""; } 
+                    else { tr[i].style.display = "none"; }
                 }
             }
         }
@@ -224,13 +220,11 @@
                     eventClick: function(info) {
                         document.getElementById('modal-title').innerText = info.event.title;
                         document.getElementById('modal-start').innerText = info.event.start ? new Date(info.event.start).toLocaleString('tr-TR', {dateStyle: 'long', timeStyle: 'short'}) : 'Belirtilmedi';
-                        document.getElementById('modal-end').innerText = info.event.end ? new Date(info.event.end).toLocaleString('tr-TR', {dateStyle: 'long', timeStyle: 'short'}) : 'Belirtilmedi';
                         document.getElementById('modal-desc').innerText = info.event.extendedProps.description || 'Açıklama yok.';
                         document.getElementById('event-modal').style.display = 'flex';
                     }
                 });
                 calendar.render();
-
                 const fullscreenBtn = document.getElementById('fullscreen-btn');
                 const calendarContainer = document.getElementById('calendar-container');
                 fullscreenBtn.addEventListener('click', function() {
@@ -243,7 +237,7 @@
 
         var modal = document.getElementById('event-modal');
         var span = document.getElementsByClassName("close")[0];
-        span.onclick = function() { modal.style.display = "none"; }
+        if(span) { span.onclick = function() { modal.style.display = "none"; } }
         window.onclick = function(event) { if (event.target == modal) { modal.style.display = "none"; } }
     </script>
 </body>
