@@ -5,11 +5,11 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
 
-# Kullanıcı Girişi için yeni kütüphaneler
+# Kullanıcı Girişi için kütüphaneler
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from authlib.integrations.flask_client import OAuth
 
-# Google Kütüphaneleri
+# Google kütüphaneleri
 import vertexai
 from vertexai.generative_models import GenerativeModel
 import gspread
@@ -19,7 +19,6 @@ from googleapiclient.discovery import build
 # --- UYGULAMA KURULUMU ---
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'yerel-test-icin-cok-gizli-bir-anahtar')
-# Oturum çerezi ayarlarını canlı sunucu (HTTPS) için güvenli hale getir
 app.config.update(SESSION_COOKIE_SECURE=True, SESSION_COOKIE_SAMESITE='None')
 
 # --- KULLANICI GİRİŞ SİSTEMİ (LOGIN MANAGER) KURULUMU ---
@@ -27,12 +26,9 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login_page'
 
-# Basit bir kullanıcı sınıfı
 class User(UserMixin):
     def __init__(self, id, name, email):
-        self.id = id
-        self.name = name
-        self.email = email
+        self.id = id; self.name = name; self.email = email
 users = {}
 
 @login_manager.user_loader
@@ -45,15 +41,11 @@ google = oauth.register(
     name='google',
     client_id=os.environ.get('GOOGLE_CLIENT_ID'),
     client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
-    # 'server_metadata_url' yerine tüm bilgileri manuel olarak veriyoruz.
-    # Bu, 'invalid_claim' hatasını kesin olarak çözer.
     access_token_url='https://accounts.google.com/o/oauth2/token',
-    access_token_params=None,
     authorize_url='https://accounts.google.com/o/oauth2/auth',
-    authorize_params=None,
     api_base_url='https://www.googleapis.com/oauth2/v1/',
     userinfo_endpoint='https://openidconnect.googleapis.com/v1.0/userinfo',
-    jwks_uri="https://www.googleapis.com/oauth2/v3/certs", # Bu satır kritik
+    jwks_uri="https://www.googleapis.com/oauth2/v3/certs",
     client_kwargs={'scope': 'openid email profile'},
 )
 
@@ -79,13 +71,6 @@ try:
         print("Tüm Google Servisleri (Render Modu) başarıyla başlatıldı.")
     else:
         print("UYARI: Ortam değişkeni bulunamadı. Yerel modda çalışılıyor.")
-        creds_file = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
-        sheets_client = gspread.authorize(creds_file)
-        spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID)
-        worksheet = spreadsheet.sheet1
-        calendar_service = build('calendar', 'v3', credentials=creds_file)
-        vertexai.init(project=PROJECT_ID, location=LOCATION)
-        print("Tüm servisler (Yerel Mod) başarıyla başlatıldı.")
 except Exception as e:
     print(f"--- KRİTİK HATA: GOOGLE SERVİSLERİ BAŞLATILAMADI ---\nHATA: {e}")
 
@@ -128,7 +113,6 @@ def login():
 def authorize():
     try:
         token = google.authorize_access_token()
-        # Token'ı session'a kaydetmek, bazı ortamlarda Authlib için gereklidir.
         session['user_token'] = token
         user_info = google.get('userinfo').json()
         user_id = user_info['id']
@@ -151,15 +135,35 @@ def logout():
 @login_required
 def index():
     records = []
+    calendar_events = []
     if worksheet:
         try:
+            # E-Tablodan kayıtları çek
             all_data = worksheet.get_all_records()
             user_email = current_user.email
             user_records = [rec for rec in all_data if rec.get('Danışman_Eposta') == user_email]
             records = list(reversed(user_records))
+            
+            # Google Takvim'den etkinlikleri çek
+            if calendar_service:
+                now = datetime.utcnow().isoformat() + 'Z'
+                events_result = calendar_service.events().list(
+                    calendarId=CALENDAR_ID, timeMin=now,
+                    maxResults=100, singleEvents=True,
+                    orderBy='startTime').execute()
+                events = events_result.get('items', [])
+                
+                for event in events:
+                    calendar_events.append({
+                        'title': event.get('summary', 'İsimsiz Etkinlik'),
+                        'start': event['start'].get('dateTime', event['start'].get('date')),
+                        'end': event['end'].get('dateTime', event['end'].get('date')),
+                        'description': event.get('description', '')
+                    })
         except Exception as e:
-            print(f"E-Tablodan veri çekerken hata oluştu: {e}")
-    return render_template('index.html', records=records)
+            print(f"Veri çekerken hata oluştu: {e}")
+            
+    return render_template('index.html', records=records, calendar_events=json.dumps(calendar_events))
 
 # --- VERİ İŞLEME ROTASI ---
 @app.route('/process', methods=['POST'])
@@ -226,7 +230,6 @@ def process_transcript():
         
         kayit_tarihi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         reminder_for_sheet = reminder_datetime_obj.strftime("%Y-%m-%d %H:%M") if reminder_datetime_obj else "Belirtilmedi"
-        
         row_to_insert = [
             current_user.email,
             structured_data.get("Kaynak", "Belirtilmedi"),
@@ -262,4 +265,3 @@ def process_transcript():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
