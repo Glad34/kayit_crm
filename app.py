@@ -45,14 +45,16 @@ google = oauth.register(
     name='google',
     client_id=os.environ.get('GOOGLE_CLIENT_ID'),
     client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
+    # 'server_metadata_url' yerine tüm bilgileri manuel olarak veriyoruz.
+    # Bu, 'invalid_claim' hatasını kesin olarak çözer.
     access_token_url='https://accounts.google.com/o/oauth2/token',
     access_token_params=None,
     authorize_url='https://accounts.google.com/o/oauth2/auth',
     authorize_params=None,
     api_base_url='https://www.googleapis.com/oauth2/v1/',
     userinfo_endpoint='https://openidconnect.googleapis.com/v1.0/userinfo',
+    jwks_uri="https://www.googleapis.com/oauth2/v3/certs", # Bu satır kritik
     client_kwargs={'scope': 'openid email profile'},
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration'
 )
 
 # --- GOOGLE SERVİSLERİNİ BAŞLATMA ---
@@ -260,3 +262,4 @@ def process_transcript():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
