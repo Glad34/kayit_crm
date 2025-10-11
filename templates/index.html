@@ -138,6 +138,7 @@
                 }
             }
         }
+        
         const micButton = document.getElementById('mic-button');
         const transcriptTextarea = document.getElementById('transcript-output');
         const confirmationButtons = document.getElementById('confirmation-buttons');
@@ -146,6 +147,7 @@
         const statusMessage = document.getElementById('status-message');
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition;
+        
         if (SpeechRecognition) {
             recognition = new SpeechRecognition();
             recognition.continuous = false;
@@ -181,11 +183,18 @@
                     }
                 }
             };
+            recognition.onerror = (event) => {
+                console.error("Speech Recognition Error", event.error);
+                isRecording = false;
+                micButton.classList.remove('recording');
+            }
         }
+
         btnNo.addEventListener('click', () => {
             transcriptTextarea.value = '';
             confirmationButtons.style.display = 'none';
         });
+
         btnYes.addEventListener('click', async () => {
             statusMessage.textContent = 'İşleniyor...';
             confirmationButtons.style.display = 'none';
@@ -216,6 +225,8 @@
                     headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' },
                     locale: 'tr',
                     buttonText: { today: 'Bugün', month: 'Ay', week: 'Hafta', list: 'Liste' },
+                    
+                    // JSON verisini, 'çifte çevirme' yapmadan, doğrudan kullan
                     events: {{ calendar_events | tojson | safe }},
                     
                     eventClick: function(info) {
