@@ -4,99 +4,83 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Emlak Asistanı</title>
-    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.14/main.min.css" rel="stylesheet">
+    <!-- FullCalendar CSS -->
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.css" rel="stylesheet">
+
     <style>
-        /* TEMEL SAYFA YAPISI */
-        html, body {
-            height: 100%;
-            margin: 0;
+        body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: #f4f7f9;
             color: #333;
+            margin: 0;
+            display: flex;
+            height: 100vh;
             overflow: hidden;
         }
-        body { display: flex; }
 
         .left-panel {
-            flex: 0 0 450px;
+            flex: 3;
             padding: 30px;
             display: flex;
             flex-direction: column;
             align-items: center;
             border-right: 1px solid #e0e0e0;
-            background-color: #fff;
+            height: 100%;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+
+        .right-panel {
+            flex: 7;
+            padding: 30px;
+            height: 100%;
             overflow-y: auto;
             box-sizing: border-box;
         }
 
-        /* DÜZELTME: Sağ panelin esnek yapısı tamamen yeniden düzenlendi */
-        .right-panel {
-            flex-grow: 1;
-            padding: 30px;
+        #mic-button {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background-color: #007bff;
+            border: none;
+            cursor: pointer;
             display: flex;
-            flex-direction: column;
-            gap: 25px; /* Paneller arası boşluk artırıldı */
-            height: 100%;
-            box-sizing: border-box;
-            overflow: hidden; /* İçerik taşmasını engelle */
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.3s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
         }
-
-        #calendar-container {
-            flex: 1 1 60%; /* Panelin %60'ını kapla, esnek */
-            min-height: 250px; /* Çok küçülürse minimum yükseklik */
-            display: flex;
-            flex-direction: column;
-        }
-
-        #tables-container {
-            flex: 1 1 40%; /* Panelin %40'ını kapla, esnek */
-            display: flex;
-            flex-direction: column;
-            gap: 25px;
-            min-height: 300px; /* İstediğiniz minimum yükseklik */
-            overflow: hidden; /* Taşmayı engelle */
-        }
-        
-        .table-section {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden; /* Kapsayıcı taşmasını engelle */
-        }
-
-        .table-container {
-            flex-grow: 1;
-            overflow-y: auto; /* Sadece bu alanda scroll bar olsun */
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-
-        /* DİĞER STİLLER */
-        .section-title { margin: 0 0 10px 0; border-bottom: 2px solid #007bff; padding-bottom: 5px; font-size: 1.1em; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-        thead th { background-color: #e9ecef; position: sticky; top: 0; z-index: 1;}
-        .filters { display: flex; gap: 10px; margin-bottom: 10px; }
-        .filters input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-        .user-info { position: absolute; top: 10px; right: 20px; text-align: right; z-index: 10; }
-        #mic-button { width: 100px; height: 100px; border-radius: 50%; background-color: #007bff; border: none; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 20px; transition: background-color 0.3s;}
-        #mic-button.recording { background-color: #dc3545; }
+        #mic-button.recording { background-color: #dc3545; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(220, 53, 69, 0); } 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); } }
         #mic-icon { width: 50px; height: 50px; background-color: white; -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><path d="M192 0C139 0 96 43 96 96V256c0 53 43 96 96 96s96-43 96-96V96c0-53-43-96-96-96zM64 216c0-13.3-10.7-24-24-24s-24 10.7-24 24v40c0 89.1 66.2 162.7 152 174.4V464H120c-13.3 0-24 10.7-24 24s10.7 24 24 24h144c13.3 0 24-10.7 24-24s-10.7-24-24-24H216V430.4c85.8-11.7 152-85.3 152-174.4V216c0-13.3-10.7-24-24-24s-24 10.7-24 24v40c0 70.7-57.3 128-128 128s-128-57.3-128-128V216z"/></svg>') center / contain no-repeat; }
-        #transcript-output { background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; padding: 20px; min-height: 150px; width: 100%; box-sizing: border-box; font-size: 16px; resize: vertical; }
+
+        #transcript-output { background-color: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; min-height: 150px; width: 100%; box-sizing: border-box; font-size: 16px; font-family: inherit; resize: vertical; }
         .reminders { margin-top: 15px; text-align: center; }
-        .badge { display: inline-block; background-color: #e9ecef; padding: 5px 10px; font-size: 12px; border-radius: 12px; margin: 3px; }
+        .badge { display: inline-block; background-color: #e9ecef; color: #495057; padding: 5px 10px; font-size: 12px; border-radius: 12px; margin: 3px; }
         #confirmation-buttons { margin-top: 20px; display: none; }
         .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 0 10px; }
         #btn-yes { background-color: #28a745; color: white; }
         #btn-no { background-color: #6c757d; color: white; }
         #status-message { margin-top: 20px; font-weight: bold; }
+
+        .section-title { margin-top: 0; margin-bottom: 15px; border-bottom: 2px solid #007bff; padding-bottom: 5px; }
+        .table-container { max-height: 35vh; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; word-break: break-word; }
+        thead th { background-color: #e9ecef; position: sticky; top: 0; z-index: 1; }
+        tbody tr:nth-child(even) { background-color: #f8f9fa; }
+        .filters { display: flex; gap: 10px; margin-bottom: 10px; }
+        .filters input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+        .user-info { position: absolute; top: 10px; right: 20px; text-align: right; z-index: 10; }
     </style>
 </head>
 <body>
     <div class="user-info">
         {% if current_user.is_authenticated %}
             <p style="margin: 0; font-size: 14px;">Hoşgeldin, <strong>{{ current_user.name }}</strong></p>
-            <a href="/logout" style="font-size: 12px; color: #dc3545;">Çıkış Yap</a>
+            <a href="/logout" style="font-size: 12px;">Çıkış Yap</a>
         {% endif %}
     </div>
 
@@ -105,9 +89,10 @@
         <button id="mic-button"><div id="mic-icon"></div></button>
         <textarea id="transcript-output" placeholder="Mikrofon butonuna basıp konuşmaya başlayın..."></textarea>
         <div class="reminders">
-            <span class="badge">Kaynak</span> <span class="badge">Müşteri Adı</span> <span class="badge">Telefon</span> <span class="badge">Taraf</span>
-            <span class="badge">Bütçe</span> <span class="badge">Oda Sayısı</span> <span class="badge">Konum (İlçe)</span> <span class="badge">Mahalle</span>
-            <span class="badge">Aksiyon</span> <span class="badge">Hatırlatma</span>
+            <span class="badge">Kaynak</span> <span class="badge">Müşteri Adı</span> <span class="badge">Telefon</span>
+            <span class="badge">Taraf</span> <span class="badge">Bütçe</span> <span class="badge">Oda Sayısı</span>
+            <span class="badge">Konum (İlçe)</span> <span class="badge">Mahalle</span> <span class="badge">Aksiyon</span>
+            <span class="badge">Hatırlatma</span>
         </div>
         <div id="confirmation-buttons">
             <p>Metni düzenleyip onaylayabilirsiniz.</p>
@@ -118,195 +103,209 @@
     </div>
 
     <div class="right-panel">
-        <div id="calendar-container">
-            <h2 class="section-title">Görev Takvimim</h2>
-            <div id='calendar' style="height: 100%;"></div>
+        <h2 class="section-title">Yaklaşan Görevlerim</h2>
+        <div class="filters">
+            <input type="text" onkeyup="filterTable('tasks-table', 0, this)" placeholder="Tarihe göre filtrele...">
+            <input type="text" onkeyup="filterTable('tasks-table', 1, this)" placeholder="Aksiyona göre filtrele...">
+            <input type="text" onkeyup="filterTable('tasks-table', 2, this)" placeholder="Müşteriye göre filtrele...">
+        </div>
+        <div class="table-container">
+            <table id="tasks-table">
+                <thead>
+                    <tr><th>Tarih</th><th>Aksiyon</th><th>Müşteri</th></tr>
+                </thead>
+                <tbody>
+                    {% for record in records %}
+                        {% if record.Aksiyonlar and record.Aksiyonlar != 'Belirtilmedi' %}
+                        <tr>
+                            <td>{{ record.Hatırlatma_Tarihi.split(' ')[0] if record.Hatırlatma_Tarihi and ' ' in record.Hatırlatma_Tarihi else record.Hatırlatma_Tarihi }}</td>
+                            <td>{{ record.Aksiyonlar }}</td>
+                            <td>{{ record.Müşteri_Adı or 'N/A' }}</td>
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
 
-        <div id="tables-container">
-            <div class="table-section">
-                <h2 class="section-title">Yaklaşan Görevlerim (Liste)</h2>
-                <div class="filters">
-                    <input type="text" onkeyup="filterTable('tasks-table', 0, this)" placeholder="Tarihe göre filtrele...">
-                    <input type="text" onkeyup="filterTable('tasks-table', 1, this)" placeholder="Aksiyona göre filtrele...">
-                    <input type="text" onkeyup="filterTable('tasks-table', 2, this)" placeholder="Müşteriye göre filtrele...">
-                </div>
-                <div class="table-container">
-                    <table id="tasks-table">
-                        <thead><tr><th>Tarih</th><th>Aksiyon</th><th>Müşteri</th></tr></thead>
-                        <tbody>
-                            {% for record in records %}{% if record.Aksiyonlar and record.Aksiyonlar != 'Belirtilmedi' and record.Hatırlatma_Tarihi and record.Hatırlatma_Tarihi != 'Belirtilmedi' %}
-                            <tr>
-                                <td>{{ record.Hatırlatma_Tarihi }}</td>
-                                <td>{{ record.Aksiyonlar }}</td>
-                                <td>{{ record.Müşteri_Adı or 'N/A' }}</td>
-                            </tr>
-                            {% endif %}{% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="table-section">
-                 <h2 class="section-title">Tüm Kayıtlarım</h2>
-                <div class="filters">
-                    <input type="text" onkeyup="filterTable('results-table', 0, this)" placeholder="Kaynağa göre...">
-                    <input type="text" onkeyup="filterTable('results-table', 1, this)" placeholder="Müşteriye göre...">
-                    <input type="text" onkeyup="filterTable('results-table', 2, this)" placeholder="İlçeye göre...">
-                    <input type="text" onkeyup="filterTable('results-table', 3, this)" placeholder="Mahalleye göre...">
-                    <input type="text" onkeyup="filterTable('results-table', 4, this)" placeholder="Bütçeye göre...">
-                </div>
-                <div class="table-container">
-                    <table id="results-table">
-                        <thead><tr><th>Kaynak</th><th>Müşteri Adı</th><th>İlçe</th><th>Mahalle</th><th>Bütçe</th></tr></thead>
-                        <tbody>
-                            {% for record in records %}
-                            <tr>
-                                <td>{{ record.Kaynak or 'N/A' }}</td>
-                                <td>{{ record.Müşteri_Adı or 'N/A' }}</td>
-                                <td>{{ record.Konum or 'N/A' }}</td>
-                                <td>{{ record.Mahalle or 'N/A' }}</td>
-                                <td>{{ record.Butce or 'N/A' }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+        <h2 class="section-title" style="margin-top: 30px;">Tüm Kayıtlarım</h2>
+        <div class="filters">
+            <input type="text" onkeyup="filterTable('results-table', 0, this)" placeholder="Kaynağa göre...">
+            <input type="text" onkeyup="filterTable('results-table', 1, this)" placeholder="Müşteriye göre...">
+            <input type="text" onkeyup="filterTable('results-table', 2, this)" placeholder="İlçeye göre...">
+            <input type="text" onkeyup="filterTable('results-table', 3, this)" placeholder="Mahalleye göre...">
+            <input type="text" onkeyup="filterTable('results-table', 4, this)" placeholder="Bütçeye göre...">
+        </div>
+        <div class="table-container">
+            <table id="results-table">
+                <thead>
+                    <tr><th>Kaynak</th><th>Müşteri Adı</th><th>İlçe</th><th>Mahalle</th><th>Bütçe</th></tr>
+                </thead>
+                <tbody>
+                    {% for record in records %}
+                    <tr>
+                        <td>{{ record.Kaynak or 'N/A' }}</td>
+                        <td>{{ record.Müşteri_Adı or 'N/A' }}</td>
+                        <td>{{ record.Konum or 'N/A' }}</td>
+                        <td>{{ record.Mahalle or 'N/A' }}</td>
+                        <td>{{ record.Butce or 'N/A' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 
-    <!-- FullCalendar JS'i eklendi -->
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.14/main.min.js"></script>
+    <h2 class="section-title" style="margin-top: 40px;">📅 Takvim Görünümü</h2>
+<div id="calendar" style="max-width: 900px; margin: 0 auto; background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);"></div>
+
+
     <script>
-    // ---- FİLTRELEME FONKSİYONU ----
-    function filterTable(tableId, columnIndex, inputElement) {
-        const table = document.getElementById(tableId);
-        const tr = table.getElementsByTagName("tbody").getElementsByTagName("tr");
-        const filter = inputElement.value.toUpperCase();
-        for (let i = 0; i < tr.length; i++) {
-            const td = tr[i].getElementsByTagName("td")[columnIndex];
-            if (td) {
-                const txtValue = td.textContent || td.innerText;
-                if (txtValue.toUpperCase().indexOf(filter) > -1) { tr[i].style.display = ""; } 
-                else { tr[i].style.display = "none"; }
+        function filterTable(tableId, columnIndex, inputElement) {
+            const table = document.getElementById(tableId);
+            const tr = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
+            const filter = inputElement.value.toUpperCase();
+
+            for (let i = 0; i < tr.length; i++) {
+                const td = tr[i].getElementsByTagName("td")[columnIndex];
+                if (td) {
+                    const txtValue = td.textContent || td.innerText;
+                    if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                        tr[i].style.display = "";
+                    } else {
+                        tr[i].style.display = "none";
+                    }
+                }
             }
         }
-    }
 
-    // ---- ELEMENT TANIMLAMALARI ----
-    const micButton = document.getElementById('mic-button');
-    const transcriptTextarea = document.getElementById('transcript-output');
-    const confirmationButtons = document.getElementById('confirmation-buttons');
-    const btnYes = document.getElementById('btn-yes');
-    const btnNo = document.getElementById('btn-no');
-    const statusMessage = document.getElementById('status-message');
+        const micButton = document.getElementById('mic-button');
+        const transcriptTextarea = document.getElementById('transcript-output');
+        const confirmationButtons = document.getElementById('confirmation-buttons');
+        const btnYes = document.getElementById('btn-yes');
+        const btnNo = document.getElementById('btn-no');
+        const statusMessage = document.getElementById('status-message');
+        
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+        
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'tr-TR';
+            recognition.interimResults = true;
+            let isRecording = false;
 
-    // ---- SES TANIMA (DURAKSAMAYA DAYANIKLI) ----
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition;
-    if (SpeechRecognition) {
-        recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.lang = 'tr-TR';
-        recognition.interimResults = true;
-        let isRecording = false;
-        let final_transcript = '';
-
-        micButton.addEventListener('click', () => {
-            if (isRecording) { recognition.stop(); } 
-            else {
-                final_transcript = '';
-                transcriptTextarea.value = '';
-                recognition.start();
-            }
-        });
-        recognition.onstart = () => {
-            isRecording = true;
-            micButton.classList.add('recording');
-            transcriptTextarea.placeholder = 'Dinliyorum...';
-            statusMessage.textContent = '';
-            confirmationButtons.style.display = 'none';
-        };
-        recognition.onend = () => {
-            isRecording = false;
-            micButton.classList.remove('recording');
-            transcriptTextarea.placeholder = 'Mikrofon butonuna basıp konuşmaya başlayın...';
-            if (transcriptTextarea.value.trim().length > 0) {
-                confirmationButtons.style.display = 'block';
-            }
-        };
-        recognition.onerror = (event) => {
-            console.error("Speech Recognition Hatası:", event.error);
-            isRecording = false;
-            micButton.classList.remove('recording');
-        };
-        recognition.onresult = (event) => {
-            let interim_transcript = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) { final_transcript += event.results[i].transcript + ' '; } 
-                else { interim_transcript += event.results[i].transcript; }
-            }
-            transcriptTextarea.value = final_transcript + interim_transcript;
-        };
-    } else {
-        micButton.disabled = true;
-        transcriptTextarea.placeholder = "Tarayıcınız ses tanıma özelliğini desteklemiyor.";
-    }
-
-    // ---- BUTON OLAYLARI ----
-    btnNo.addEventListener('click', () => {
-        transcriptTextarea.value = '';
-        transcriptTextarea.placeholder = 'İptal edildi. Tekrar denemek için mikrofona basın.';
-        confirmationButtons.style.display = 'none';
-    });
-    btnYes.addEventListener('click', async () => {
-        statusMessage.textContent = 'İşleniyor, lütfen bekleyin...';
-        confirmationButtons.style.display = 'none';
-        const editedTranscript = transcriptTextarea.value;
-        try {
-            const response = await fetch('/process', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ transcript: editedTranscript })
-            });
-            const result = await response.json();
-            if (response.ok && result.status === 'success') {
-                statusMessage.textContent = 'Başarıyla kaydedildi! Sayfa yenileniyor...';
-                setTimeout(() => { window.location.reload(); }, 1500);
-            } else {
-                statusMessage.textContent = `Hata: ${result.message}`;
-            }
-        } catch (error) {
-            console.error('Fetch hatası:', error);
-            statusMessage.textContent = 'Sunucuya bağlanırken bir hata oluştu.';
-        }
-    });
-
-    // ---- FULLCALENDAR BAŞLATMA KODU ----
-    document.addEventListener('DOMContentLoaded', function() {
-            const eventData = {{ calendar_events_json | safe }};
-            var calendarEl = document.getElementById('calendar');
-            var calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth',
-                locale: 'tr',
-                headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' },
-                buttonText: { today: 'Bugün', month: 'Ay', week: 'Hafta', day: 'Gün' },
-                events: eventData,
-                height: "100%", // Kapsayıcısının yüksekliğine tam uyum sağla
-                eventClick: function(info) {
-                    const props = info.event.extendedProps;
-                    let eventDate = info.event.start.toLocaleString('tr-TR', { dateStyle: 'long', timeStyle: 'short' });
-                    alert(
-                        `Aksiyon: ${info.event.title}\n` +
-                        `Tarih: ${eventDate}\n\n` +
-                        `Müşteri: ${props.musteri || 'N/A'}\n` +
-                        `Telefon: ${props.telefon || 'N/A'}\n` +
-                        `Notlar: ${props.notlar || 'Ek not yok.'}`
-                    );
+            micButton.addEventListener('click', () => {
+                isRecording = !isRecording;
+                if (isRecording) {
+                    transcriptTextarea.value = '';
+                    recognition.start();
+                    micButton.classList.add('recording');
+                    transcriptTextarea.placeholder = 'Dinliyorum...';
+                    statusMessage.textContent = '';
+                    confirmationButtons.style.display = 'none';
+                } else {
+                    recognition.stop();
+                    micButton.classList.remove('recording');
                 }
             });
-            calendar.render();
+
+            recognition.onresult = (event) => {
+                let finalTranscriptPart = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscriptPart = transcript + ' ';
+                    }
+                }
+                transcriptTextarea.value += finalTranscriptPart;
+                transcriptTextarea.scrollTop = transcriptTextarea.scrollHeight;
+            };
+
+            recognition.onend = () => {
+                if (isRecording) {
+                    recognition.start();
+                } else {
+                    micButton.classList.remove('recording');
+                    transcriptTextarea.placeholder = 'Mikrofon butonuna basıp konuşmaya başlayın...';
+                    if (transcriptTextarea.value.trim().length > 0) {
+                        confirmationButtons.style.display = 'block';
+                    }
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Speech Recognition Error", event.error);
+                isRecording = false;
+                micButton.classList.remove('recording');
+            }
+
+        } else {
+            micButton.disabled = true;
+            transcriptTextarea.placeholder = "Tarayıcınız ses tanıma özelliğini desteklemiyor."
+        }
+
+        btnNo.addEventListener('click', () => {
+            transcriptTextarea.value = '';
+            transcriptTextarea.placeholder = 'İptal edildi. Tekrar denemek için mikrofona basın.';
+            confirmationButtons.style.display = 'none';
+        });
+
+        btnYes.addEventListener('click', async () => {
+            statusMessage.textContent = 'İşleniyor, lütfen bekleyin...';
+            confirmationButtons.style.display = 'none';
+            const editedTranscript = transcriptTextarea.value;
+            try {
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ transcript: editedTranscript })
+                });
+                const result = await response.json();
+                if (response.ok && result.status === 'success') {
+                    statusMessage.textContent = 'Başarıyla kaydedildi! Sayfa yenileniyor...';
+                    setTimeout(() => { window.location.reload(); }, 1500);
+                } else {
+                    statusMessage.textContent = `Hata: ${result.message}`;
+                }
+            } catch (error) {
+                console.error('Fetch hatası:', error);
+                statusMessage.textContent = 'Sunucuya bağlanırken bir hata oluştu.';
+            }
         });
     </script>
+    <!-- FullCalendar JS -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const calendarEl = document.getElementById('calendar');
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'tr',
+        height: 'auto',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,listWeek'
+        },
+        events: [
+            {% for record in records %}
+                {% if record.Hatırlatma_Tarihi and record.Hatırlatma_Tarihi != 'Belirtilmedi' %}
+                    {
+                        title: '{{ record.Aksiyonlar|default("Görev")|escape }} - {{ record.Müşteri_Adı|default("Müşteri")|escape }}',
+                        start: '{{ record.Hatırlatma_Tarihi.split(" ")[0] }}',
+                        allDay: true
+                    },
+                {% endif %}
+            {% endfor %}
+        ],
+        eventColor: '#007bff',
+        eventTextColor: 'white'
+    });
+    calendar.render();
+});
+</script>
+
 </body>
 </html>
