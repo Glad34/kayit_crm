@@ -17,6 +17,8 @@
   --radius: 12px;
   --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   --transition: 0.3s ease;
+  --success: #28a745;
+  --danger: #dc3545;
   --text-dark: #222;
   --text-muted: #666;
   --white: #fff;
@@ -86,6 +88,7 @@ body {
   color: var(--text-dark);
 }
 
+/* === Mikrofon Butonu === */
 #mic-button {
   width: 110px;
   height: 110px;
@@ -98,16 +101,27 @@ body {
   align-items: center;
   box-shadow: 0 8px 16px rgba(0,0,0,0.15);
   transition: 0.25s ease;
+  position: relative;
 }
-#mic-button:hover { transform: scale(1.06); }
+#mic-button:hover { transform: scale(1.05); }
 #mic-button.recording { background: #dc3545; animation: pulse 1.5s infinite; }
-
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 rgba(220,53,69,0.5); }
   70% { box-shadow: 0 0 0 20px rgba(220,53,69,0); }
   100% { box-shadow: 0 0 0 0 rgba(220,53,69,0); }
 }
 
+/* + İkonu */
+#mic-button::before {
+  content: "+";
+  position: absolute;
+  font-size: 50px;
+  color: white;
+  line-height: 0;
+  font-weight: 300;
+}
+
+/* === Transcript Alanı === */
 #transcript-output {
   width: 100%;
   border: 1px solid #ddd;
@@ -141,6 +155,27 @@ body {
   margin: 4px;
 }
 
+/* === Onayla / İptal Butonları === */
+#confirmation-buttons {
+  display: none;
+  margin-top: 20px;
+}
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 15px;
+  margin: 5px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: all 0.2s ease;
+}
+.btn:hover { transform: translateY(-2px); }
+#btn-yes { background: var(--success); color: white; }
+#btn-no { background: var(--danger); color: white; }
+#btn-yes:hover { background: #34ce57; }
+#btn-no:hover { background: #e74c3c; }
+
 /* === SAĞ PANEL === */
 .right-panel {
   flex: 3 1 650px;
@@ -164,9 +199,7 @@ body {
 
 /* === TABLOLAR === */
 .table-container {
-  max-height: 35vh;
-  overflow-y: auto;
-  border: 1px solid #eee;
+  overflow-x: auto;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   background: var(--white);
@@ -176,16 +209,12 @@ table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
-  border-radius: var(--radius);
 }
 thead th {
   background: var(--primary);
   color: #fff;
   padding: 10px;
-  position: sticky;
-  top: 0;
   text-align: left;
-  font-weight: 600;
 }
 td {
   padding: 8px 12px;
@@ -193,10 +222,9 @@ td {
 }
 tbody tr:hover {
   background-color: #f8f9ff;
-  cursor: pointer;
 }
 
-/* === FİLTRELER === */
+/* === Filtreler === */
 .filters {
   display: flex;
   flex-wrap: wrap;
@@ -209,7 +237,6 @@ tbody tr:hover {
   border: 1px solid #ccc;
   border-radius: var(--radius);
   font-size: 13px;
-  box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
   transition: var(--transition);
 }
 .filters input:focus {
@@ -229,30 +256,33 @@ tbody tr:hover {
 }
 
 /* === MOBİL === */
-@media (max-width: 992px) {
+@media (max-width: 768px) {
   body { font-size: 15px; }
   .container { flex-direction: column; padding: 0 10px; }
-  .left-panel, .right-panel { max-width: 100%; box-shadow: none; border-radius: 0; }
+  .left-panel, .right-panel {
+    max-width: 100%;
+    border-radius: var(--radius);
+    box-shadow: none;
+  }
   #mic-button { width: 90px; height: 90px; }
-  #transcript-output { font-size: 14px; }
   .filters { flex-direction: column; }
   .filters input { width: 100%; }
-  table, thead, tbody, th, td, tr {
-    display: block;
-    width: 100%;
-  }
+  
+  /* Tablolar mobilde kart haline gelir */
+  table, thead, tbody, th, td, tr { display: block; width: 100%; }
   thead { display: none; }
   tbody tr {
+    background: var(--white);
     margin-bottom: 15px;
     border-radius: var(--radius);
     box-shadow: var(--shadow);
-    padding: 10px;
+    padding: 10px 15px;
   }
   td {
     border: none;
-    padding: 5px 0;
     display: flex;
     justify-content: space-between;
+    padding: 6px 0;
     font-size: 14px;
   }
   td::before {
@@ -261,6 +291,7 @@ tbody tr:hover {
     color: var(--text-muted);
   }
 }
+
 
 </style>
 </head>
