@@ -15,6 +15,7 @@ from vertexai.generative_models import GenerativeModel
 import gspread
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 # --- UYGULAMA KURULUMU ---
 app = Flask(__name__)
@@ -45,15 +46,13 @@ google = oauth.register(
     name='google',
     client_id=os.environ.get('GOOGLE_CLIENT_ID'),
     client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
-    # 'server_metadata_url' yerine tüm bilgileri manuel olarak veriyoruz.
-    # Bu, 'invalid_claim' hatasını kesin olarak çözer.
     access_token_url='https://accounts.google.com/o/oauth2/token',
     access_token_params=None,
     authorize_url='https://accounts.google.com/o/oauth2/auth',
     authorize_params=None,
     api_base_url='https://www.googleapis.com/oauth2/v1/',
     userinfo_endpoint='https://openidconnect.googleapis.com/v1.0/userinfo',
-    jwks_uri="https://www.googleapis.com/oauth2/v3/certs", # Bu satır kritik
+    jwks_uri="https://www.googleapis.com/oauth2/v3/certs",
     client_kwargs={'scope': 'openid email profile'},
 )
 
@@ -128,7 +127,6 @@ def login():
 def authorize():
     try:
         token = google.authorize_access_token()
-        # Token'ı session'a kaydetmek, bazı ortamlarda Authlib için gereklidir.
         session['user_token'] = token
         user_info = google.get('userinfo').json()
         user_id = user_info['id']
@@ -147,13 +145,11 @@ def logout():
     return redirect(url_for('login_page'))
 
 # --- ANA UYGULAMA SAYFASI ---
-# app.py dosyasındaki index fonksiyonunu bu şekilde güncelleyin
-
 @app.route('/')
 @login_required
 def index():
     records = []
-    calendar_events = [] # Takvim için boş bir liste oluştur
+    calendar_events = []
     if worksheet:
         try:
             all_data = worksheet.get_all_records()
@@ -161,29 +157,32 @@ def index():
             user_records = [rec for rec in all_data if rec.get('Danışman_Eposta') == user_email]
             records = list(reversed(user_records))
 
-            # --- YENİ EKLENEN BÖLÜM ---
-            # Kayıtları döngüye al ve takvimin anlayacağı formata çevir
             for record in records:
-                # Sadece geçerli bir hatırlatma tarihi ve aksiyonu olan kayıtları al
-                if record.get('Hatırlatma_Tarihi') and record.get('Hatırlatma_Tarihi') != 'Belirtilmedi' and record.get('Aksiyonlar') and record.get('Aksiyonlar') != 'Belirtilmedi':
-                    event = {
-                        'title': record.get('Aksiyonlar'),
-                        'start': record.get('Hatırlatma_Tarihi').replace(' ', 'T'), # FullCalendar için ISO formatına yakın (YYYY-MM-DDTHH:MM)
-                        'extendedProps': { # Tıklayınca gösterilecek ekstra bilgiler
-                            'musteri': record.get('Müşteri_Adı', 'N/A'),
-                            'telefon': record.get('Telefon', 'N/A'),
-                            'notlar': record.get('Notlar', 'N/A'),
-                            'taraf': record.get('Taraf', 'N/A'),
-                            'butce': record.get('Butce', 'N/A')
+                try:
+                    hatirlatma_tarihi_str = record.get('Hatırlatma_Tarihi')
+                    aksiyon = record.get('Aksiyonlar')
+                    
+                    if hatirlatma_tarihi_str and hatirlatma_tarihi_str != 'Belirtilmedi' and aksiyon and aksiyon != 'Belirtilmedi':
+                        event = {
+                            'title': aksiyon,
+                            'start': hatirlatma_tarihi_str.replace(' ', 'T'),
+                            'extendedProps': {
+                                'musteri': record.get('Müşteri_Adı', 'N/A'),
+                                'telefon': record.get('Telefon', 'N/A'),
+                                'notlar': record.get('Notlar', 'N/A'),
+                                'taraf': record.get('Taraf', 'N/A'),
+                                'butce': record.get('Butce', 'N/A')
+                            }
                         }
-                    }
-                    calendar_events.append(event)
-            # --- YENİ BÖLÜM SONU ---
+                        calendar_events.append(event)
+                except Exception as e:
+                    print(f"Takvim etkinliği oluşturulurken bir kayıtta hata oluştu: {record}. Hata: {e}")
 
+        except gspread.exceptions.APIError as e:
+            print(f"Google Sheets API Hatası: {e}")
         except Exception as e:
             print(f"E-Tablodan veri çekerken hata oluştu: {e}")
             
-    # Şablona hem records listesini hem de takvim olaylarının JSON versiyonunu gönder
     return render_template('index.html', records=records, calendar_events_json=json.dumps(calendar_events))
 
 # --- VERİ İŞLEME ROTASI ---
@@ -193,65 +192,74 @@ def process_transcript():
     try:
         data = request.get_json()
         transcript = data.get('transcript')
-        model = GenerativeModel("gemini-2.5-pro")
+        if not transcript:
+            return jsonify({"status": "error", "message": "Boş metin gönderildi."}), 400
+
+        model = GenerativeModel("gemini-1.5-pro-001") # Modeli güncelledim
         prompt = get_gemini_prompt(transcript)
         response = model.generate_content(prompt)
-        cleaned_response_text = response.text.replace("```json", "").replace("```", "").strip()
+        
+        # Yanıtın temizlenmesi
+        cleaned_response_text = response.text.strip()
+        if cleaned_response_text.startswith("```json"):
+            cleaned_response_text = cleaned_response_text[7:-3].strip()
+        
         structured_data = json.loads(cleaned_response_text)
         
-        reminder_date_text = structured_data.get("Hatırlatma_Tarihi_Metni", "").lower()
-        reminder_time_text = structured_data.get("Hatırlatma_Saati_Metni", "").lower()
+        # Tarih ve saat işleme
         reminder_datetime_obj = None
-        if reminder_date_text and reminder_date_text != "belirtilmedi":
-            now = datetime.now()
-            base_date = None
-            if "yarın" in reminder_date_text: base_date = now + timedelta(days=1)
-            elif "bugün" in reminder_date_text: base_date = now
-            elif "gün sonra" in reminder_date_text:
-                try: base_date = now + timedelta(days=int(''.join(filter(str.isdigit, reminder_date_text))))
-                except: base_date = now
-            elif "haftaya" in reminder_date_text:
-                try:
-                    date_text_en = reminder_date_text.replace("haftaya", "next")
-                    turkish_replacements = {"pazartesi": "monday", "salı": "tuesday", "çarşamba": "wednesday", "perşembe": "thursday", "cuma": "friday", "cumartesi": "saturday", "pazar": "sunday"}
-                    for tr, en in turkish_replacements.items(): date_text_en = date_text_en.replace(tr, en)
-                    base_date = parse(date_text_en, default=now)
-                except: base_date = now + timedelta(weeks=1)
-            elif "hafta sonra" in reminder_date_text:
-                try: base_date = now + timedelta(weeks=int(''.join(filter(str.isdigit, reminder_date_text))))
-                except: base_date = now
-            elif "ay sonra" in reminder_date_text:
-                try: base_date = now + relativedelta(months=int(''.join(filter(str.isdigit, reminder_date_text))))
-                except: base_date = now
-            else:
-                try:
-                    turkish_replacements = {"pazartesi": "monday", "salı": "tuesday", "çarşamba": "wednesday", "perşembe": "thursday", "cuma": "friday", "cumartesi": "saturday", "pazar": "sunday"}
-                    for tr, en in turkish_replacements.items(): reminder_date_text = reminder_date_text.replace(tr, en)
-                    base_date = parse(reminder_date_text, default=now)
-                except: base_date = now
-            
-            hour, minute = 10, 0
-            if reminder_time_text and reminder_time_text != "belirtilmedi":
-                try:
-                    time_parts = reminder_time_text.split(':')
-                    hour = int(time_parts[0]); minute = int(time_parts[1]) if len(time_parts) > 1 else 0
-                except: hour, minute = 10, 0
-            reminder_datetime_obj = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        try:
+            reminder_date_text = structured_data.get("Hatırlatma_Tarihi_Metni", "").lower()
+            reminder_time_text = structured_data.get("Hatırlatma_Saati_Metni", "").lower()
 
+            if reminder_date_text and reminder_date_text != "belirtilmedi":
+                now = datetime.now()
+                base_date = now
+
+                if "yarın" in reminder_date_text: base_date = now + timedelta(days=1)
+                elif "gün sonra" in reminder_date_text:
+                    days = int(''.join(filter(str.isdigit, reminder_date_text)) or 1)
+                    base_date = now + timedelta(days=days)
+                elif "hafta sonra" in reminder_date_text:
+                    weeks = int(''.join(filter(str.isdigit, reminder_date_text)) or 1)
+                    base_date = now + timedelta(weeks=weeks)
+                elif "ay sonra" in reminder_date_text:
+                    months = int(''.join(filter(str.isdigit, reminder_date_text)) or 1)
+                    base_date = now + relativedelta(months=months)
+                else:
+                    try: base_date = parse(reminder_date_text, default=now)
+                    except: pass
+                
+                hour, minute = 10, 0 # Varsayılan saat
+                if reminder_time_text and reminder_time_text != "belirtilmedi":
+                    try:
+                        parsed_time = parse(reminder_time_text)
+                        hour, minute = parsed_time.hour, parsed_time.minute
+                    except: pass
+                
+                reminder_datetime_obj = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        except Exception as e:
+            print(f"Tarih/saat ayrıştırma hatası: {e}")
+
+        # Google Takvim'e ekleme
         if reminder_datetime_obj and calendar_service:
-            event_start_time = reminder_datetime_obj
-            event_end_time = event_start_time + timedelta(hours=1)
-            event = {
-                'summary': structured_data.get("Aksiyonlar", "İsimsiz Görev"),
-                'description': f"Müşteri: {structured_data.get('Müşteri_Adı', 'Belirtilmedi')}\nTelefon: {structured_data.get('Telefon', 'Belirtilmedi')}\n\nNotlar:\n{transcript}",
-                'start': {'dateTime': event_start_time.isoformat(), 'timeZone': 'Europe/Istanbul'},
-                'end': {'dateTime': event_end_time.isoformat(), 'timeZone': 'Europe/Istanbul'},
-            }
-            calendar_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
-        
+            try:
+                event = {
+                    'summary': structured_data.get("Aksiyonlar", "İsimsiz Görev"),
+                    'description': f"Müşteri: {structured_data.get('Müşteri_Adı', 'Belirtilmedi')}\nTelefon: {structured_data.get('Telefon', 'Belirtilmedi')}\n\nNotlar:\n{transcript}",
+                    'start': {'dateTime': reminder_datetime_obj.isoformat(), 'timeZone': 'Europe/Istanbul'},
+                    'end': {'dateTime': (reminder_datetime_obj + timedelta(hours=1)).isoformat(), 'timeZone': 'Europe/Istanbul'},
+                }
+                calendar_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
+                print("Google Takvim etkinliği oluşturuldu.")
+            except HttpError as e:
+                print(f"Google Takvim'e etkinlik eklenirken HATA oluştu: {e}")
+
+        # Google E-Tablolar'a ekleme
         kayit_tarihi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         reminder_for_sheet = reminder_datetime_obj.strftime("%Y-%m-%d %H:%M") if reminder_datetime_obj else "Belirtilmedi"
         
+        # Sütun başlıklarının tam olarak E-Tablonuzdaki gibi olduğundan emin olun!
         row_to_insert = [
             current_user.email,
             structured_data.get("Kaynak", "Belirtilmedi"),
@@ -279,11 +287,19 @@ def process_transcript():
         ]
         if worksheet:
             worksheet.append_row(row_to_insert, value_input_option='USER_ENTERED')
+            print("Google E-Tablolar'a yeni kayıt eklendi.")
         
         return jsonify({"status": "success", "data": structured_data})
+
+    except json.JSONDecodeError as e:
+        print(f"JSON Ayrıştırma Hatası: {e}\nGelen Ham Metin: {response.text}")
+        return jsonify({"status": "error", "message": "Yapay zekadan geçersiz formatta yanıt alındı."}), 500
     except Exception as e:
-        print(f"\n!!!! HATA !!!!\n{e}\n!!!!!!!!!!!!!!")
+        import traceback
+        print(f"\n!!!! GENEL HATA !!!!\n{traceback.format_exc()}\n!!!!!!!!!!!!!!")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
+    # Yerel test için debug=True, canlı ortam için False olmalı
+    # ve host='0.0.0.0' ile dışarıya açılabilir.
     app.run(debug=True)
