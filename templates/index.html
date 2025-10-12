@@ -177,6 +177,14 @@ thead th {
   #calendar { margin-bottom: 30px; }
   .section-title { text-align: center; }
 }
+
+#confirmation-buttons {
+  display: none;
+}
+
+.fc-tooltip {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
 </style>
 </head>
 <body>
@@ -382,34 +390,76 @@ thead th {
     </script>
     <!-- FullCalendar JS -->
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.js"></script>
-<script>
+<script>,
 document.addEventListener('DOMContentLoaded', function() {
   const calendarEl = document.getElementById('calendar');
   const calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: 'dayGridMonth',
-    locale: 'tr',
-    height: 'auto',
-    headerToolbar: {
-      left: 'prev,next today',
-      center: 'title',
-      right: 'dayGridMonth,timeGridWeek,listWeek'
-    },
-    events: [
-      {% for record in records %}
-        {% if record.Hatırlatma_Tarihi and record.Hatırlatma_Tarihi != 'Belirtilmedi' %}
-        {
-          title: '{{ record.Aksiyonlar|default("Görev")|escape }} - {{ record.Müşteri_Adı|default("Müşteri")|escape }}',
-          start: '{{ record.Hatırlatma_Tarihi.split(" ")[0] }}',
-          allDay: true
-        },
-        {% endif %}
-      {% endfor %}
-    ],
-    eventColor: '#007bff',
-    eventTextColor: 'white'
-  });
-  calendar.render();
+  initialView: 'dayGridMonth',
+  locale: 'tr',
+  height: 'auto',
+  headerToolbar: {
+    left: 'prev,next today',
+    center: 'title',
+    right: 'dayGridMonth,timeGridWeek,listWeek'
+  },
+  events: [
+    {% for record in records %}
+      {% if record.Hatırlatma_Tarihi and record.Hatırlatma_Tarihi != 'Belirtilmedi' %}
+      {
+        title: '{{ record.Aksiyonlar|default("Görev")|escape }} - {{ record.Müşteri_Adı|default("Müşteri")|escape }}',
+        start: '{{ record.Hatırlatma_Tarihi.split(" ")[0] }}',
+        allDay: true,
+        extendedProps: {
+          musteri: '{{ record.Müşteri_Adı|default("Belirtilmedi")|escape }}',
+          telefon: '{{ record.Telefon|default("Belirtilmedi")|escape }}',
+          notlar: '{{ record.Notlar|default("Belirtilmedi")|escape }}',
+          konum: '{{ record.Konum|default("Belirtilmedi")|escape }}',
+          mahalle: '{{ record.Mahalle|default("Belirtilmedi")|escape }}'
+        }
+      },
+      {% endif %}
+    {% endfor %}
+  ],
+  eventColor: '#007bff',
+  eventTextColor: 'white',
+
+  // 🟢 Üzerine gelindiğinde bilgi kutusu göster
+  eventMouseEnter: function(info) {
+    const event = info.event;
+    const tooltip = document.createElement('div');
+    tooltip.classList.add('fc-tooltip');
+    tooltip.innerHTML = `
+      <strong>${event.title}</strong><br>
+      <b>Müşteri:</b> ${event.extendedProps.musteri}<br>
+      <b>Telefon:</b> ${event.extendedProps.telefon}<br>
+      <b>Konum:</b> ${event.extendedProps.konum} / ${event.extendedProps.mahalle}<br>
+      <b>Not:</b> ${event.extendedProps.notlar}
+    `;
+    document.body.appendChild(tooltip);
+    tooltip.style.position = 'absolute';
+    tooltip.style.background = 'rgba(0,0,0,0.8)';
+    tooltip.style.color = 'white';
+    tooltip.style.padding = '8px 12px';
+    tooltip.style.borderRadius = '6px';
+    tooltip.style.fontSize = '13px';
+    tooltip.style.pointerEvents = 'none';
+    tooltip.style.transition = '0.1s';
+    tooltip.style.zIndex = 9999;
+
+    const moveTooltip = (e) => {
+      tooltip.style.left = e.pageX + 10 + 'px';
+      tooltip.style.top = e.pageY + 10 + 'px';
+    };
+    moveTooltip(info.jsEvent);
+    document.addEventListener('mousemove', moveTooltip);
+
+    info.el.addEventListener('mouseleave', () => {
+      tooltip.remove();
+      document.removeEventListener('mousemove', moveTooltip);
+    });
+  }
 });
+
 </script>
 
 </body>
