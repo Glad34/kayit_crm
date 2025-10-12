@@ -185,163 +185,166 @@
     <!-- FullCalendar JS'i eklendi -->
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.14/main.min.js"></script>
     <script>
-        // ---- MEVCUT JAVASCRIPT KODLARI ----
-        function filterTable(tableId, columnIndex, inputElement) {
-            const table = document.getElementById(tableId);
-            const tr = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
-            const filter = inputElement.value.toUpperCase();
-
-            for (let i = 0; i < tr.length; i++) {
-                const td = tr[i].getElementsByTagName("td")[columnIndex];
-                if (td) {
-                    const txtValue = td.textContent || td.innerText;
-                    if (txtValue.toUpperCase().indexOf(filter) > -1) {
-                        tr[i].style.display = "";
-                    } else {
-                        tr[i].style.display = "none";
-                    }
+    // ---- FİLTRELEME FONKSİYONU ----
+    function filterTable(tableId, columnIndex, inputElement) {
+        const table = document.getElementById(tableId);
+        const tr = table.getElementsByTagName("tbody").getElementsByTagName("tr");
+        const filter = inputElement.value.toUpperCase();
+        for (let i = 0; i < tr.length; i++) {
+            const td = tr[i].getElementsByTagName("td")[columnIndex];
+            if (td) {
+                const txtValue = td.textContent || td.innerText;
+                if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                    tr[i].style.display = "";
+                } else {
+                    tr[i].style.display = "none";
                 }
             }
         }
+    }
 
-        const micButton = document.getElementById('mic-button');
-        const transcriptTextarea = document.getElementById('transcript-output');
-        const confirmationButtons = document.getElementById('confirmation-buttons');
-        const btnYes = document.getElementById('btn-yes');
-        const btnNo = document.getElementById('btn-no');
-        const statusMessage = document.getElementById('status-message');
-        
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        let recognition;
-        
-        if (SpeechRecognition) {
-            recognition = new SpeechRecognition();
-            recognition.continuous = true; // Daha uzun konuşmalar için true daha iyi olabilir
-            recognition.lang = 'tr-TR';
-            recognition.interimResults = true;
-            let isRecording = false;
+    // ---- ELEMENT TANIMLAMALARI ----
+    const micButton = document.getElementById('mic-button');
+    const transcriptTextarea = document.getElementById('transcript-output');
+    const confirmationButtons = document.getElementById('confirmation-buttons');
+    const btnYes = document.getElementById('btn-yes');
+    const btnNo = document.getElementById('btn-no');
+    const statusMessage = document.getElementById('status-message');
 
-            micButton.addEventListener('click', () => {
-                isRecording = !isRecording;
-                if (isRecording) {
-                    transcriptTextarea.value = '';
-                    recognition.start();
-                    micButton.classList.add('recording');
-                    transcriptTextarea.placeholder = 'Dinliyorum...';
-                    statusMessage.textContent = '';
-                    confirmationButtons.style.display = 'none';
-                } else {
-                    recognition.stop();
-                    micButton.classList.remove('recording');
-                }
-            });
+    // ---- SES TANIMA (DÜZELTİLMİŞ) ----
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition;
 
-            recognition.onresult = (event) => {
-                let finalTranscript = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    if (event.results[i].isFinal) {
-                        finalTranscript += event.results[i][0].transcript;
-                    }
-                }
-                if (finalTranscript) {
-                    transcriptTextarea.value = finalTranscript;
-                }
-            };
-            
-            recognition.onend = () => {
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = true; // Konuşma bitene kadar dinlemeye devam et
+        recognition.lang = 'tr-TR';
+        recognition.interimResults = true; // Yazarken anlık sonuçları göster
+
+        let isRecording = false;
+        let final_transcript = ''; // Konuşma parçalarını biriktirmek için
+
+        micButton.addEventListener('click', () => {
+            if (isRecording) {
+                recognition.stop();
                 isRecording = false;
-                micButton.classList.remove('recording');
-                transcriptTextarea.placeholder = 'Mikrofon butonuna basıp konuşmaya başlayın...';
-                if (transcriptTextarea.value.trim().length > 0) {
-                    confirmationButtons.style.display = 'block';
-                }
-            };
-
-            recognition.onerror = (event) => {
-                console.error("Speech Recognition Error", event.error);
-                isRecording = false;
-                micButton.classList.remove('recording');
+            } else {
+                final_transcript = ''; // Her yeni kayıtta metni sıfırla
+                transcriptTextarea.value = '';
+                recognition.start();
+                isRecording = true;
             }
+        });
 
-        } else {
-            micButton.disabled = true;
-            transcriptTextarea.placeholder = "Tarayıcınız ses tanıma özelliğini desteklemiyor."
+        recognition.onstart = () => {
+            isRecording = true;
+            micButton.classList.add('recording');
+            transcriptTextarea.placeholder = 'Dinliyorum...';
+            statusMessage.textContent = '';
+            confirmationButtons.style.display = 'none';
+        };
+
+        recognition.onend = () => {
+            isRecording = false;
+            micButton.classList.remove('recording');
+            transcriptTextarea.placeholder = 'Mikrofon butonuna basıp konuşmaya başlayın...';
+            if (transcriptTextarea.value.trim().length > 0) {
+                confirmationButtons.style.display = 'block';
+            }
+        };
+
+        recognition.onerror = (event) => {
+            console.error("Speech Recognition Hatası:", event.error);
+            isRecording = false;
+            micButton.classList.remove('recording');
+        };
+
+        recognition.onresult = (event) => {
+            let interim_transcript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    // isFinal olduğunda, bunu kalıcı metne ekle
+                    final_transcript += event.results[i].transcript + ' ';
+                } else {
+                    // isFinal değilse, bu geçici metindir
+                    interim_transcript += event.results[i].transcript;
+                }
+            }
+            // Metin kutusunu kalıcı ve geçici metnin birleşimiyle güncelle
+            transcriptTextarea.value = final_transcript + interim_transcript;
+        };
+
+    } else {
+        micButton.disabled = true;
+        transcriptTextarea.placeholder = "Tarayıcınız ses tanıma özelliğini desteklemiyor.";
+    }
+
+    // ---- BUTON OLAYLARI ----
+    btnNo.addEventListener('click', () => {
+        transcriptTextarea.value = '';
+        transcriptTextarea.placeholder = 'İptal edildi. Tekrar denemek için mikrofona basın.';
+        confirmationButtons.style.display = 'none';
+    });
+
+    btnYes.addEventListener('click', async () => {
+        statusMessage.textContent = 'İşleniyor, lütfen bekleyin...';
+        confirmationButtons.style.display = 'none';
+        const editedTranscript = transcriptTextarea.value;
+        try {
+            const response = await fetch('/process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ transcript: editedTranscript })
+            });
+            const result = await response.json();
+            if (response.ok && result.status === 'success') {
+                statusMessage.textContent = 'Başarıyla kaydedildi! Sayfa yenileniyor...';
+                setTimeout(() => { window.location.reload(); }, 1500);
+            } else {
+                statusMessage.textContent = `Hata: ${result.message}`;
+            }
+        } catch (error) {
+            console.error('Fetch hatası:', error);
+            statusMessage.textContent = 'Sunucuya bağlanırken bir hata oluştu.';
         }
+    });
 
-        btnNo.addEventListener('click', () => {
-            transcriptTextarea.value = '';
-            transcriptTextarea.placeholder = 'İptal edildi. Tekrar denemek için mikrofona basın.';
-            confirmationButtons.style.display = 'none';
-        });
-
-        btnYes.addEventListener('click', async () => {
-            statusMessage.textContent = 'İşleniyor, lütfen bekleyin...';
-            confirmationButtons.style.display = 'none';
-            const editedTranscript = transcriptTextarea.value;
-            try {
-                const response = await fetch('/process', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ transcript: editedTranscript })
-                });
-                const result = await response.json();
-                if (response.ok && result.status === 'success') {
-                    statusMessage.textContent = 'Başarıyla kaydedildi! Sayfa yenileniyor...';
-                    setTimeout(() => { window.location.reload(); }, 1500);
-                } else {
-                    statusMessage.textContent = `Hata: ${result.message}`;
-                }
-            } catch (error) {
-                console.error('Fetch hatası:', error);
-                statusMessage.textContent = 'Sunucuya bağlanırken bir hata oluştu.';
+    // ---- FULLCALENDAR BAŞLATMA KODU ----
+    document.addEventListener('DOMContentLoaded', function() {
+        var calendarEl = document.getElementById('calendar');
+        var calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            locale: 'tr',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            buttonText: {
+                today: 'Bugün', month: 'Ay', week: 'Hafta', day: 'Gün'
+            },
+            events: {{ calendar_events_json | safe }},
+            eventClick: function(info) {
+                info.jsEvent.preventDefault();
+                const props = info.event.extendedProps;
+                let eventDate = info.event.start;
+                let formattedDate = eventDate ? eventDate.toLocaleString('tr-TR', {
+                    year: 'numeric', month: 'long', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit', hour12: false
+                }) : 'Tarih Belirtilmemiş';
+                
+                let alertMessage = `Aksiyon: ${info.event.title}\n` +
+                                 `Tarih: ${formattedDate}\n\n` +
+                                 `Müşteri: ${props.musteri || 'N/A'}\n` +
+                                 `Telefon: ${props.telefon || 'N/A'}\n` +
+                                 `Taraf: ${props.taraf || 'N/A'}\n` +
+                                 `Bütçe: ${props.butce || 'N/A'}\n` +
+                                 `Notlar: ${props.notlar || 'Ek not yok.'}`;
+                alert(alertMessage);
             }
         });
-
-        // ---- YENİ: FULLCALENDAR BAŞLATMA KODU ----
-        document.addEventListener('DOMContentLoaded', function() {
-            var calendarEl = document.getElementById('calendar');
-            var calendar = new FullCalendar.Calendar(calendarEl, {
-                // Takvim ayarları
-                initialView: 'dayGridMonth', // Başlangıç görünümü: Aylık
-                locale: 'tr', // Türkçe dil desteği
-                headerToolbar: { // Üst bar butonları
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'dayGridMonth,timeGridWeek,timeGridDay' // Görünüm değiştirme butonları
-                },
-                buttonText: {
-                    today:    'Bugün',
-                    month:    'Ay',
-                    week:     'Hafta',
-                    day:      'Gün'
-                },
-                // Olaylar (Etkinlikler)
-                // app.py'den gönderdiğimiz JSON verisini burada kullanıyoruz
-                events: {{ calendar_events_json | safe }},
-
-                // Bir olaya tıklandığında ne olacağı
-                eventClick: function(info) {
-                    info.jsEvent.preventDefault(); // Tarayıcının varsayılan eylemini engelle
-                    const props = info.event.extendedProps;
-                    let eventDate = info.event.start;
-                    let formattedDate = eventDate.toLocaleString('tr-TR', {
-                        year: 'numeric', month: 'long', day: 'numeric', 
-                        hour: '2-digit', minute: '2-digit', hour12: false
-                    });
-
-                    let alertMessage = `Aksiyon: ${info.event.title}\n` +
-                                     `Tarih: ${formattedDate}\n\n` +
-                                     `Müşteri: ${props.musteri || 'Belirtilmedi'}\n` +
-                                     `Telefon: ${props.telefon || 'Belirtilmedi'}\n` +
-                                     `Taraf: ${props.taraf || 'Belirtilmedi'}\n` +
-                                     `Bütçe: ${props.butce || 'Belirtilmedi'}\n` +
-                                     `Notlar: ${props.notlar || 'Ek not yok.'}`;
-                    
-                    alert(alertMessage);
-                }
-            });
-            calendar.render(); // Takvimi ekrana çiz
-        });
-    </script>
+        calendar.render();
+    });
+</script>
 </body>
 </html>
