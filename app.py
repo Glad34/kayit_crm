@@ -5,11 +5,11 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
 
-# Kullanıcı Girişi için kütüphaneler
+# Kullanıcı Girişi için yeni kütüphaneler
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from authlib.integrations.flask_client import OAuth
 
-# Google kütüphaneleri
+# Google Kütüphaneleri
 import vertexai
 from vertexai.generative_models import GenerativeModel
 import gspread
@@ -19,6 +19,7 @@ from googleapiclient.discovery import build
 # --- UYGULAMA KURULUMU ---
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'yerel-test-icin-cok-gizli-bir-anahtar')
+# Oturum çerezi ayarlarını canlı sunucu (HTTPS) için güvenli hale getir
 app.config.update(SESSION_COOKIE_SECURE=True, SESSION_COOKIE_SAMESITE='None')
 
 # --- KULLANICI GİRİŞ SİSTEMİ (LOGIN MANAGER) KURULUMU ---
@@ -26,9 +27,12 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login_page'
 
+# Basit bir kullanıcı sınıfı
 class User(UserMixin):
     def __init__(self, id, name, email):
-        self.id = id; self.name = name; self.email = email
+        self.id = id
+        self.name = name
+        self.email = email
 users = {}
 
 @login_manager.user_loader
@@ -41,11 +45,15 @@ google = oauth.register(
     name='google',
     client_id=os.environ.get('GOOGLE_CLIENT_ID'),
     client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
+    # 'server_metadata_url' yerine tüm bilgileri manuel olarak veriyoruz.
+    # Bu, 'invalid_claim' hatasını kesin olarak çözer.
     access_token_url='https://accounts.google.com/o/oauth2/token',
+    access_token_params=None,
     authorize_url='https://accounts.google.com/o/oauth2/auth',
+    authorize_params=None,
     api_base_url='https://www.googleapis.com/oauth2/v1/',
     userinfo_endpoint='https://openidconnect.googleapis.com/v1.0/userinfo',
-    jwks_uri="https://www.googleapis.com/oauth2/v3/certs",
+    jwks_uri="https://www.googleapis.com/oauth2/v3/certs", # Bu satır kritik
     client_kwargs={'scope': 'openid email profile'},
 )
 
@@ -71,6 +79,13 @@ try:
         print("Tüm Google Servisleri (Render Modu) başarıyla başlatıldı.")
     else:
         print("UYARI: Ortam değişkeni bulunamadı. Yerel modda çalışılıyor.")
+        creds_file = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+        sheets_client = gspread.authorize(creds_file)
+        spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID)
+        worksheet = spreadsheet.sheet1
+        calendar_service = build('calendar', 'v3', credentials=creds_file)
+        vertexai.init(project=PROJECT_ID, location=LOCATION)
+        print("Tüm servisler (Yerel Mod) başarıyla başlatıldı.")
 except Exception as e:
     print(f"--- KRİTİK HATA: GOOGLE SERVİSLERİ BAŞLATILAMADI ---\nHATA: {e}")
 
@@ -113,6 +128,7 @@ def login():
 def authorize():
     try:
         token = google.authorize_access_token()
+        # Token'ı session'a kaydetmek, bazı ortamlarda Authlib için gereklidir.
         session['user_token'] = token
         user_info = google.get('userinfo').json()
         user_id = user_info['id']
@@ -131,39 +147,44 @@ def logout():
     return redirect(url_for('login_page'))
 
 # --- ANA UYGULAMA SAYFASI ---
+# app.py dosyasındaki index fonksiyonunu bu şekilde güncelleyin
+
 @app.route('/')
 @login_required
 def index():
     records = []
-    calendar_events = []
+    calendar_events = [] # Takvim için boş bir liste oluştur
     if worksheet:
         try:
-            # E-Tablodan kişisel kayıtları çek
             all_data = worksheet.get_all_records()
             user_email = current_user.email
             user_records = [rec for rec in all_data if rec.get('Danışman_Eposta') == user_email]
             records = list(reversed(user_records))
-            
-            # Google Takvim'den TÜM etkinlikleri çek
-            if calendar_service:
-                now_utc = datetime.utcnow().isoformat() + 'Z'
-                events_result = calendar_service.events().list(
-                    calendarId=CALENDAR_ID, timeMin=now_utc,
-                    maxResults=250, singleEvents=True,
-                    orderBy='startTime').execute()
-                events = events_result.get('items', [])
-                
-                for event in events:
-                    calendar_events.append({
-                        'title': event.get('summary', 'İsimsiz Etkinlik'),
-                        'start': event['start'].get('dateTime', event['start'].get('date')),
-                        'end': event['end'].get('dateTime', event['end'].get('date')),
-                        'description': event.get('description', '')
-                    })
+
+            # --- YENİ EKLENEN BÖLÜM ---
+            # Kayıtları döngüye al ve takvimin anlayacağı formata çevir
+            for record in records:
+                # Sadece geçerli bir hatırlatma tarihi ve aksiyonu olan kayıtları al
+                if record.get('Hatırlatma_Tarihi') and record.get('Hatırlatma_Tarihi') != 'Belirtilmedi' and record.get('Aksiyonlar') and record.get('Aksiyonlar') != 'Belirtilmedi':
+                    event = {
+                        'title': record.get('Aksiyonlar'),
+                        'start': record.get('Hatırlatma_Tarihi').replace(' ', 'T'), # FullCalendar için ISO formatına yakın (YYYY-MM-DDTHH:MM)
+                        'extendedProps': { # Tıklayınca gösterilecek ekstra bilgiler
+                            'musteri': record.get('Müşteri_Adı', 'N/A'),
+                            'telefon': record.get('Telefon', 'N/A'),
+                            'notlar': record.get('Notlar', 'N/A'),
+                            'taraf': record.get('Taraf', 'N/A'),
+                            'butce': record.get('Butce', 'N/A')
+                        }
+                    }
+                    calendar_events.append(event)
+            # --- YENİ BÖLÜM SONU ---
+
         except Exception as e:
-            print(f"Veri çekerken hata oluştu: {e}")
+            print(f"E-Tablodan veri çekerken hata oluştu: {e}")
             
-    return render_template('index.html', records=records, calendar_events=json.dumps(calendar_events))
+    # Şablona hem records listesini hem de takvim olaylarının JSON versiyonunu gönder
+    return render_template('index.html', records=records, calendar_events_json=json.dumps(calendar_events))
 
 # --- VERİ İŞLEME ROTASI ---
 @app.route('/process', methods=['POST'])
