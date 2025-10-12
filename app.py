@@ -16,11 +16,11 @@ import gspread
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+import traceback
 
 # --- UYGULAMA KURULUMU ---
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'yerel-test-icin-cok-gizli-bir-anahtar')
-# Oturum çerezi ayarlarını canlı sunucu (HTTPS) için güvenli hale getir
 app.config.update(SESSION_COOKIE_SECURE=True, SESSION_COOKIE_SAMESITE='None')
 
 # --- KULLANICI GİRİŞ SİSTEMİ (LOGIN MANAGER) KURULUMU ---
@@ -28,7 +28,6 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login_page'
 
-# Basit bir kullanıcı sınıfı
 class User(UserMixin):
     def __init__(self, id, name, email):
         self.id = id
@@ -60,7 +59,7 @@ google = oauth.register(
 PROJECT_ID = "masaustuotomasyon"
 LOCATION = "us-central1"
 SPREADSHEET_ID = "1xjdxkMXKe3iQjD9rosNb69CIo36JhHUCPM-4kYzzRBM"
-CALENDAR_ID = 'onurglad34@gmail.com' 
+CALENDAR_ID = 'onurglad34@gmail.com'
 creds = None
 worksheet = None
 calendar_service = None
@@ -70,21 +69,17 @@ try:
     if google_creds_json_str:
         google_creds_dict = json.loads(google_creds_json_str)
         creds = Credentials.from_service_account_info(google_creds_dict, scopes=SCOPES)
-        vertexai.init(project=PROJECT_ID, location=LOCATION, credentials=creds)
-        sheets_client = gspread.authorize(creds)
-        spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID)
-        worksheet = spreadsheet.sheet1
-        calendar_service = build('calendar', 'v3', credentials=creds)
-        print("Tüm Google Servisleri (Render Modu) başarıyla başlatıldı.")
+        print("Google kimlik bilgileri ortam değişkeninden yüklendi.")
     else:
-        print("UYARI: Ortam değişkeni bulunamadı. Yerel modda çalışılıyor.")
-        creds_file = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
-        sheets_client = gspread.authorize(creds_file)
-        spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID)
-        worksheet = spreadsheet.sheet1
-        calendar_service = build('calendar', 'v3', credentials=creds_file)
-        vertexai.init(project=PROJECT_ID, location=LOCATION)
-        print("Tüm servisler (Yerel Mod) başarıyla başlatıldı.")
+        print("UYARI: Ortam değişkeni bulunamadı. Yerel 'credentials.json' dosyası kullanılıyor.")
+        creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+
+    vertexai.init(project=PROJECT_ID, location=LOCATION, credentials=creds)
+    sheets_client = gspread.authorize(creds)
+    spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID)
+    worksheet = spreadsheet.sheet1
+    calendar_service = build('calendar', 'v3', credentials=creds)
+    print("Tüm Google Servisleri başarıyla başlatıldı.")
 except Exception as e:
     print(f"--- KRİTİK HATA: GOOGLE SERVİSLERİ BAŞLATILAMADI ---\nHATA: {e}")
 
@@ -115,8 +110,7 @@ def get_gemini_prompt(transcript):
 
 # --- GİRİŞ / ÇIKIŞ SAYFALARI (ROUTES) ---
 @app.route('/login_page')
-def login_page():
-    return render_template('login.html')
+def login_page(): return render_template('login.html')
 
 @app.route('/login')
 def login():
@@ -156,7 +150,8 @@ def index():
             user_email = current_user.email
             user_records = [rec for rec in all_data if rec.get('Danışman_Eposta') == user_email]
             records = list(reversed(user_records))
-
+            print(f"{len(records)} adet kayıt bulundu ve sayfaya gönderiliyor.")
+            
             for record in records:
                 try:
                     hatirlatma_tarihi_str = record.get('Hatırlatma_Tarihi')
@@ -171,12 +166,13 @@ def index():
                                 'telefon': record.get('Telefon', 'N/A'),
                                 'notlar': record.get('Notlar', 'N/A'),
                                 'taraf': record.get('Taraf', 'N/A'),
-                                'butce': record.get('Butce', 'N/A')
+                                'butce': str(record.get('Butce', 'N/A')) # Bütçeyi stringe çevir
                             }
                         }
                         calendar_events.append(event)
                 except Exception as e:
                     print(f"Takvim etkinliği oluşturulurken bir kayıtta hata oluştu: {record}. Hata: {e}")
+            print(f"Takvim için {len(calendar_events)} adet etkinlik oluşturuldu.")
 
         except gspread.exceptions.APIError as e:
             print(f"Google Sheets API Hatası: {e}")
@@ -195,58 +191,46 @@ def process_transcript():
         if not transcript:
             return jsonify({"status": "error", "message": "Boş metin gönderildi."}), 400
 
-        model = GenerativeModel("gemini-1.5-pro-001") # Modeli güncelledim
+        model = GenerativeModel("gemini-1.5-pro-001")
         prompt = get_gemini_prompt(transcript)
         response = model.generate_content(prompt)
         
-        # Yanıtın temizlenmesi
         cleaned_response_text = response.text.strip()
         if cleaned_response_text.startswith("```json"):
-            cleaned_response_text = cleaned_response_text[7:-3].strip()
+            cleaned_response_text = cleaned_response_text[len("```json"):].rstrip("```").strip()
         
         structured_data = json.loads(cleaned_response_text)
         
-        # Tarih ve saat işleme
         reminder_datetime_obj = None
         try:
             reminder_date_text = structured_data.get("Hatırlatma_Tarihi_Metni", "").lower()
             reminder_time_text = structured_data.get("Hatırlatma_Saati_Metni", "").lower()
-
             if reminder_date_text and reminder_date_text != "belirtilmedi":
                 now = datetime.now()
                 base_date = now
-
                 if "yarın" in reminder_date_text: base_date = now + timedelta(days=1)
-                elif "gün sonra" in reminder_date_text:
-                    days = int(''.join(filter(str.isdigit, reminder_date_text)) or 1)
-                    base_date = now + timedelta(days=days)
-                elif "hafta sonra" in reminder_date_text:
-                    weeks = int(''.join(filter(str.isdigit, reminder_date_text)) or 1)
-                    base_date = now + timedelta(weeks=weeks)
-                elif "ay sonra" in reminder_date_text:
-                    months = int(''.join(filter(str.isdigit, reminder_date_text)) or 1)
-                    base_date = now + relativedelta(months=months)
+                elif "gün sonra" in reminder_date_text: base_date = now + timedelta(days=int(''.join(filter(str.isdigit, reminder_date_text)) or 1))
+                elif "hafta sonra" in reminder_date_text: base_date = now + timedelta(weeks=int(''.join(filter(str.isdigit, reminder_date_text)) or 1))
+                elif "ay sonra" in reminder_date_text: base_date = now + relativedelta(months=int(''.join(filter(str.isdigit, reminder_date_text)) or 1))
                 else:
                     try: base_date = parse(reminder_date_text, default=now)
                     except: pass
                 
-                hour, minute = 10, 0 # Varsayılan saat
+                hour, minute = 10, 0
                 if reminder_time_text and reminder_time_text != "belirtilmedi":
                     try:
                         parsed_time = parse(reminder_time_text)
                         hour, minute = parsed_time.hour, parsed_time.minute
                     except: pass
-                
                 reminder_datetime_obj = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
         except Exception as e:
             print(f"Tarih/saat ayrıştırma hatası: {e}")
 
-        # Google Takvim'e ekleme
         if reminder_datetime_obj and calendar_service:
             try:
                 event = {
-                    'summary': structured_data.get("Aksiyonlar", "İsimsiz Görev"),
-                    'description': f"Müşteri: {structured_data.get('Müşteri_Adı', 'Belirtilmedi')}\nTelefon: {structured_data.get('Telefon', 'Belirtilmedi')}\n\nNotlar:\n{transcript}",
+                    'summary': structured_data.get("Aksiyonlar", "Görev"),
+                    'description': f"Müşteri: {structured_data.get('Müşteri_Adı', 'N/A')}\nTelefon: {structured_data.get('Telefon', 'N/A')}\n\nNotlar:\n{transcript}",
                     'start': {'dateTime': reminder_datetime_obj.isoformat(), 'timeZone': 'Europe/Istanbul'},
                     'end': {'dateTime': (reminder_datetime_obj + timedelta(hours=1)).isoformat(), 'timeZone': 'Europe/Istanbul'},
                 }
@@ -255,35 +239,21 @@ def process_transcript():
             except HttpError as e:
                 print(f"Google Takvim'e etkinlik eklenirken HATA oluştu: {e}")
 
-        # Google E-Tablolar'a ekleme
         kayit_tarihi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         reminder_for_sheet = reminder_datetime_obj.strftime("%Y-%m-%d %H:%M") if reminder_datetime_obj else "Belirtilmedi"
         
-        # Sütun başlıklarının tam olarak E-Tablonuzdaki gibi olduğundan emin olun!
         row_to_insert = [
-            current_user.email,
-            structured_data.get("Kaynak", "Belirtilmedi"),
-            structured_data.get("Müşteri_Adı", "Belirtilmedi"),
-            structured_data.get("Telefon", "Belirtilmedi"),
-            structured_data.get("Oturum_mu_Yatirim_mi", "Belirtilmedi"),
-            structured_data.get("Taraf", "Belirtilmedi"),
-            structured_data.get("Butce", "Belirtilmedi"),
-            structured_data.get("Oda_Sayisi", "Belirtilmedi"),
-            structured_data.get("MetreKare", "Belirtilmedi"),
-            structured_data.get("Bina_Yasi", "Belirtilmedi"),
-            structured_data.get("Kat", "Belirtilmedi"),
-            structured_data.get("Balkon", "Belirtilmedi"),
-            structured_data.get("Asansor", "Belirtilmedi"),
-            structured_data.get("Konum", "Belirtilmedi"),
-            structured_data.get("Mahalle", "Belirtilmedi"),
-            structured_data.get("Havuz", "Belirtilmedi"),
-            structured_data.get("Otopark", "Belirtilmedi"),
-            structured_data.get("Manzara", "Belirtilmedi"),
-            structured_data.get("Notlar", "Belirtilmedi"),
-            structured_data.get("Konut_Tipi", "Belirtilmedi"),
-            kayit_tarihi,
-            structured_data.get("Aksiyonlar", "Belirtilmedi"),
-            reminder_for_sheet
+            current_user.email, structured_data.get("Kaynak", "Belirtilmedi"), structured_data.get("Müşteri_Adı", "Belirtilmedi"),
+            structured_data.get("Telefon", "Belirtilmedi"), structured_data.get("Oturum_mu_Yatirim_mi", "Belirtilmedi"),
+            structured_data.get("Taraf", "Belirtilmedi"), structured_data.get("Butce", "Belirtilmedi"),
+            structured_data.get("Oda_Sayisi", "Belirtilmedi"), structured_data.get("MetreKare", "Belirtilmedi"),
+            structured_data.get("Bina_Yasi", "Belirtilmedi"), structured_data.get("Kat", "Belirtilmedi"),
+            structured_data.get("Balkon", "Belirtilmedi"), structured_data.get("Asansor", "Belirtilmedi"),
+            structured_data.get("Konum", "Belirtilmedi"), structured_data.get("Mahalle", "Belirtilmedi"),
+            structured_data.get("Havuz", "Belirtilmedi"), structured_data.get("Otopark", "Belirtilmedi"),
+            structured_data.get("Manzara", "Belirtilmedi"), structured_data.get("Notlar", "Belirtilmedi"),
+            structured_data.get("Konut_Tipi", "Belirtilmedi"), kayit_tarihi,
+            structured_data.get("Aksiyonlar", "Belirtilmedi"), reminder_for_sheet
         ]
         if worksheet:
             worksheet.append_row(row_to_insert, value_input_option='USER_ENTERED')
@@ -292,14 +262,11 @@ def process_transcript():
         return jsonify({"status": "success", "data": structured_data})
 
     except json.JSONDecodeError as e:
-        print(f"JSON Ayrıştırma Hatası: {e}\nGelen Ham Metin: {response.text}")
+        print(f"JSON Ayrıştırma Hatası: {e}\nModelin Ham Yanıtı: {response.text}")
         return jsonify({"status": "error", "message": "Yapay zekadan geçersiz formatta yanıt alındı."}), 500
     except Exception as e:
-        import traceback
         print(f"\n!!!! GENEL HATA !!!!\n{traceback.format_exc()}\n!!!!!!!!!!!!!!")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": "Sunucuda beklenmedik bir hata oluştu."}), 500
 
 if __name__ == '__main__':
-    # Yerel test için debug=True, canlı ortam için False olmalı
-    # ve host='0.0.0.0' ile dışarıya açılabilir.
     app.run(debug=True)
