@@ -279,6 +279,122 @@ thead th {
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
 
 <script>
+
+
+        function filterTable(tableId, columnIndex, inputElement) {
+            const table = document.getElementById(tableId);
+            const tr = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
+            const filter = inputElement.value.toUpperCase();
+
+            for (let i = 0; i < tr.length; i++) {
+                const td = tr[i].getElementsByTagName("td")[columnIndex];
+                if (td) {
+                    const txtValue = td.textContent || td.innerText;
+                    if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                        tr[i].style.display = "";
+                    } else {
+                        tr[i].style.display = "none";
+                    }
+                }
+            }
+        }
+
+        const micButton = document.getElementById('mic-button');
+        const transcriptTextarea = document.getElementById('transcript-output');
+        const confirmationButtons = document.getElementById('confirmation-buttons');
+        const btnYes = document.getElementById('btn-yes');
+        const btnNo = document.getElementById('btn-no');
+        const statusMessage = document.getElementById('status-message');
+        
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+        
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'tr-TR';
+            recognition.interimResults = true;
+            let isRecording = false;
+
+            micButton.addEventListener('click', () => {
+                isRecording = !isRecording;
+                if (isRecording) {
+                    transcriptTextarea.value = '';
+                    recognition.start();
+                    micButton.classList.add('recording');
+                    transcriptTextarea.placeholder = 'Dinliyorum...';
+                    statusMessage.textContent = '';
+                    confirmationButtons.style.display = 'none';
+                } else {
+                    recognition.stop();
+                    micButton.classList.remove('recording');
+                }
+            });
+
+            recognition.onresult = (event) => {
+                let finalTranscriptPart = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscriptPart = transcript + ' ';
+                    }
+                }
+                transcriptTextarea.value += finalTranscriptPart;
+                transcriptTextarea.scrollTop = transcriptTextarea.scrollHeight;
+            };
+
+            recognition.onend = () => {
+                if (isRecording) {
+                    recognition.start();
+                } else {
+                    micButton.classList.remove('recording');
+                    transcriptTextarea.placeholder = 'Mikrofon butonuna basıp konuşmaya başlayın...';
+                    if (transcriptTextarea.value.trim().length > 0) {
+                        confirmationButtons.style.display = 'block';
+                    }
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Speech Recognition Error", event.error);
+                isRecording = false;
+                micButton.classList.remove('recording');
+            }
+
+        } else {
+            micButton.disabled = true;
+            transcriptTextarea.placeholder = "Tarayıcınız ses tanıma özelliğini desteklemiyor."
+        }
+
+        btnNo.addEventListener('click', () => {
+            transcriptTextarea.value = '';
+            transcriptTextarea.placeholder = 'İptal edildi. Tekrar denemek için mikrofona basın.';
+            confirmationButtons.style.display = 'none';
+        });
+
+        btnYes.addEventListener('click', async () => {
+            statusMessage.textContent = 'İşleniyor, lütfen bekleyin...';
+            confirmationButtons.style.display = 'none';
+            const editedTranscript = transcriptTextarea.value;
+            try {
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ transcript: editedTranscript })
+                });
+                const result = await response.json();
+                if (response.ok && result.status === 'success') {
+                    statusMessage.textContent = 'Başarıyla kaydedildi! Sayfa yenileniyor...';
+                    setTimeout(() => { window.location.reload(); }, 1500);
+                } else {
+                    statusMessage.textContent = `Hata: ${result.message}`;
+                }
+            } catch (error) {
+                console.error('Fetch hatası:', error);
+                statusMessage.textContent = 'Sunucuya bağlanırken bir hata oluştu.';
+            }
+        });
+    
 document.addEventListener('DOMContentLoaded', function() {
   const calendarEl = document.getElementById('calendar');
   if (!calendarEl) return;
@@ -355,3 +471,4 @@ document.addEventListener('DOMContentLoaded', function() {
 
 </body>
 </html>
+
