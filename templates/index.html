@@ -56,6 +56,8 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.05);
     }
 
+    .left-panel h1 { margin: 0 0 12px 0; text-align: center; }
+
     #mic-button {
       width: 100px;
       height: 100px;
@@ -67,7 +69,7 @@
       justify-content: center;
       align-items: center;
       box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-      margin: 0 auto 20px auto; /* ortala */
+      margin: 0 auto 20px auto; /* her boyutta ortala */
       transition: 0.3s;
     }
     #mic-button:hover { background-color: #0056b3; }
@@ -115,7 +117,7 @@
       background: #fff;
       border-left: 1px solid var(--border);
       box-sizing: border-box;
-      min-width: 0; /* flex içinde taşmayı engeller */
+      min-width: 0; /* flex taşmasını engeller */
     }
 
     .section-title {
@@ -123,8 +125,7 @@
       padding-bottom: 5px;
       font-size: 18px;
       font-weight: 600;
-      margin-top: 0;
-      margin-bottom: 15px;
+      margin: 0 0 15px 0;
     }
 
     /* ——— Tablo ——— */
@@ -134,7 +135,7 @@
       border: 1px solid #ddd;
       border-radius: var(--radius);
     }
-    /* yatay kaydırma modu */
+    /* yatay kaydırma modu (mobilde slider gibi) */
     .table-container.scrollable { overflow-x: auto; }
     table.scrollable { min-width: 720px; }
 
@@ -195,15 +196,10 @@
         margin-bottom: 14px;
       }
 
-      /* Başlık ve mikrofonu ortala */
-      .left-panel h1 { text-align: center; }
-      .reminders { text-align: center; }
-
-      /* Filtreler çok taşarsa alt satıra düşsün */
       .filters { flex-wrap: wrap; }
       .filters input { flex: 1 1 100%; min-width: 0; }
 
-      /* Tablolar kart değil, yatay kaydırmalı kalsın */
+      /* Tablolar kart yerine yatay kaydırmalı kalsın */
       .table-container { max-height: unset; }
       #calendar { width: 100%; min-height: 420px; padding: 6px; }
 
@@ -224,7 +220,7 @@
   <div class="container">
     <!-- Sol Panel -->
     <div class="left-panel">
-      <h1 style="margin-top:0;text-align:center;">Sesli Not Al</h1>
+      <h1>Sesli Not Al</h1>
       <button id="mic-button"><div id="mic-icon"></div></button>
       <textarea id="transcript-output" placeholder="Mikrofon butonuna basıp konuşmaya başlayın..."></textarea>
 
@@ -254,11 +250,11 @@
           <thead><tr><th>Tarih</th><th>Aksiyon</th><th>Müşteri</th></tr></thead>
           <tbody>
             {% for record in records %}
-            {% if record.Aksiyonlar and record.Aksiyonlar != 'Belirtilmedi' %}
+            {% if record.get('Aksiyonlar') and record.get('Aksiyonlar') != 'Belirtilmedi' %}
             <tr>
-              <td>{{ record.Hatırlatma_Tarihi.split(' ')[0] if record.Hatırlatma_Tarihi and ' ' in record.Hatırlatma_Tarihi else record.Hatırlatma_Tarihi }}</td>
-              <td>{{ record.Aksiyonlar }}</td>
-              <td>{{ record.Müşteri_Adı or 'N/A' }}</td>
+              <td>{{ (record.get('Hatırlatma_Tarihi') or '')[:10] }}</td>
+              <td>{{ record.get('Aksiyonlar','') }}</td>
+              <td>{{ record.get('Müşteri_Adı','N/A') }}</td>
             </tr>
             {% endif %}
             {% endfor %}
@@ -280,11 +276,11 @@
           <tbody>
             {% for record in records %}
             <tr>
-              <td>{{ record.Kaynak or 'N/A' }}</td>
-              <td>{{ record.Müşteri_Adı or 'N/A' }}</td>
-              <td>{{ record.Konum or 'N/A' }}</td>
-              <td>{{ record.Mahalle or 'N/A' }}</td>
-              <td>{{ record.Butce or 'N/A' }}</td>
+              <td>{{ record.get('Kaynak','N/A') }}</td>
+              <td>{{ record.get('Müşteri_Adı','N/A') }}</td>
+              <td>{{ record.get('Konum','N/A') }}</td>
+              <td>{{ record.get('Mahalle','N/A') }}</td>
+              <td>{{ record.get('Butce','N/A') }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -417,9 +413,9 @@
       const calendarEl = document.getElementById('calendar');
 
       const calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',       // → her cihazda AYLIK başlasın
+        initialView: 'dayGridMonth',   // Ay görünümü varsayılan
         locale: 'tr',
-        buttonText: {                      // → Türkçe buton metinleri
+        buttonText: {                  // Türkçe metinler
           today: 'Bugün',
           month: 'Ay',
           week: 'Hafta',
@@ -438,17 +434,17 @@
         },
         events: [
           {% for record in records %}
-            {% if record.Hatırlatma_Tarihi and record.Hatırlatma_Tarihi != 'Belirtilmedi' %}
+            {% if record.get('Hatırlatma_Tarihi') and record.get('Hatırlatma_Tarihi') != 'Belirtilmedi' %}
             {
-              title: '{{ record.Aksiyonlar|default("Görev")|escape }} - {{ record.Müşteri_Adı|default("Müşteri")|escape }}',
-              start: '{{ record.Hatırlatma_Tarihi.split(" ")[0] }}',
+              title: '{{ (record.get("Aksiyonlar") or "Görev")|e }} - {{ (record.get("Müşteri_Adı") or "Müşteri")|e }}',
+              start: '{{ (record.get("Hatırlatma_Tarihi") or "")[:10] }}',
               allDay: true,
               extendedProps: {
-                musteri: '{{ record.Müşteri_Adı|default("Belirtilmedi")|escape }}',
-                telefon: '{{ record.Telefon|default("Belirtilmedi")|escape }}',
-                notlar: '{{ record.Notlar|default("Belirtilmedi")|escape }}',
-                konum: '{{ record.Konum|default("Belirtilmedi")|escape }}',
-                mahalle: '{{ record.Mahalle|default("Belirtilmedi")|escape }}'
+                musteri: '{{ (record.get("Müşteri_Adı") or "Belirtilmedi")|e }}',
+                telefon: '{{ (record.get("Telefon") or "Belirtilmedi")|e }}',
+                notlar:  '{{ (record.get("Notlar") or "Belirtilmedi")|e }}',
+                konum:   '{{ (record.get("Konum") or "Belirtilmedi")|e }}',
+                mahalle: '{{ (record.get("Mahalle") or "Belirtilmedi")|e }}'
               }
             },
             {% endif %}
@@ -470,7 +466,7 @@
           alert(lines.join('\n'));
         },
 
-        /* Masaüstü için hover tooltip */
+        /* Masaüstü için hover tooltip (dokunmatiklerde devre dışı) */
         eventMouseEnter: function(info) {
           if (matchMedia('(hover: hover)').matches === false) return;
           const event = info.event;
