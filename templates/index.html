@@ -2,13 +2,10 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
-  />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
   <title>Emlak Asistanı</title>
 
-  <!-- FullCalendar CSS (doğru CSS dosyası) -->
+  <!-- FullCalendar CSS -->
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/main.min.css" rel="stylesheet" />
 
   <style>
@@ -46,6 +43,7 @@
       display: flex;
       flex-wrap: wrap;
       margin-top: 60px;
+      gap: 0;
     }
 
     /* === SOL PANEL === */
@@ -69,7 +67,7 @@
       justify-content: center;
       align-items: center;
       box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-      margin-bottom: 20px;
+      margin: 0 auto 20px auto; /* ortala */
       transition: 0.3s;
     }
     #mic-button:hover { background-color: #0056b3; }
@@ -129,12 +127,17 @@
       margin-bottom: 15px;
     }
 
+    /* ——— Tablo ——— */
     .table-container {
       max-height: 35vh;
       overflow-y: auto;
       border: 1px solid #ddd;
       border-radius: var(--radius);
     }
+    /* yatay kaydırma modu */
+    .table-container.scrollable { overflow-x: auto; }
+    table.scrollable { min-width: 720px; }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -143,11 +146,13 @@
     th, td {
       padding: 8px 10px;
       border-bottom: 1px solid #eee;
+      vertical-align: top;
     }
     thead th {
       background: #f8f9fa;
       position: sticky;
       top: 0;
+      z-index: 1;
     }
 
     .filters {
@@ -173,15 +178,10 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
 
-    #confirmation-buttons {
-      display: none;
-    }
+    #confirmation-buttons { display: none; }
+    .fc-tooltip { box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
 
-    .fc-tooltip {
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    }
-
-    /* === MOBİL RESET (≤ 992px) === */
+    /* === MOBİL (≤ 992px) === */
     @media (max-width: 992px) {
       .container { display: block; margin-top: 10px; padding: 0 10px; }
 
@@ -195,48 +195,21 @@
         margin-bottom: 14px;
       }
 
+      /* Başlık ve mikrofonu ortala */
+      .left-panel h1 { text-align: center; }
+      .reminders { text-align: center; }
+
+      /* Filtreler çok taşarsa alt satıra düşsün */
       .filters { flex-wrap: wrap; }
       .filters input { flex: 1 1 100%; min-width: 0; }
 
-      /* Tablo: kart görünümü */
-      .table-container { max-height: unset; overflow: visible; }
-      table.responsive { border: 0; }
-      table.responsive thead { display: none; }
-      table.responsive,
-      table.responsive tbody,
-      table.responsive tr,
-      table.responsive td { display: block; width: 100%; }
-      table.responsive tr {
-        background: #fff;
-        margin: 0 0 12px 0;
-        border: 1px solid #eee;
-        border-radius: var(--radius);
-        padding: 8px 10px;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-      }
-      table.responsive td {
-        border: 0;
-        border-bottom: 1px dashed #eee;
-        padding: 8px 6px;
-      }
-      table.responsive td:last-child { border-bottom: 0; }
-      table.responsive td::before {
-        content: attr(data-label);
-        font-weight: 600;
-        display: block;
-        margin-bottom: 4px;
-        color: #555;
-      }
-
-      /* Takvim: tam genişlik + kompakt toolbar */
+      /* Tablolar kart değil, yatay kaydırmalı kalsın */
+      .table-container { max-height: unset; }
       #calendar { width: 100%; min-height: 420px; padding: 6px; }
+
       .fc .fc-toolbar-title { font-size: 1.1rem; }
       .fc .fc-toolbar-chunk { flex-wrap: wrap; gap: 6px; }
     }
-
-    /* İstersen kart yerine yatay kaydırmalı tablo alternatifi */
-    .table-container.scrollable { overflow-x: auto; }
-    table.scrollable { min-width: 640px; }
   </style>
 </head>
 <body>
@@ -251,7 +224,7 @@
   <div class="container">
     <!-- Sol Panel -->
     <div class="left-panel">
-      <h1 style="margin-top:0;">Sesli Not Al</h1>
+      <h1 style="margin-top:0;text-align:center;">Sesli Not Al</h1>
       <button id="mic-button"><div id="mic-icon"></div></button>
       <textarea id="transcript-output" placeholder="Mikrofon butonuna basıp konuşmaya başlayın..."></textarea>
 
@@ -276,8 +249,8 @@
         <input type="text" onkeyup="filterTable('tasks-table', 1, this)" placeholder="Aksiyona göre...">
         <input type="text" onkeyup="filterTable('tasks-table', 2, this)" placeholder="Müşteriye göre...">
       </div>
-      <div class="table-container">
-        <table id="tasks-table" class="responsive">
+      <div class="table-container scrollable">
+        <table id="tasks-table" class="scrollable">
           <thead><tr><th>Tarih</th><th>Aksiyon</th><th>Müşteri</th></tr></thead>
           <tbody>
             {% for record in records %}
@@ -301,8 +274,8 @@
         <input type="text" onkeyup="filterTable('results-table', 3, this)" placeholder="Mahalleye göre...">
         <input type="text" onkeyup="filterTable('results-table', 4, this)" placeholder="Bütçeye göre...">
       </div>
-      <div class="table-container">
-        <table id="results-table" class="responsive">
+      <div class="table-container scrollable">
+        <table id="results-table" class="scrollable">
           <thead><tr><th>Kaynak</th><th>Müşteri</th><th>İlçe</th><th>Mahalle</th><th>Bütçe</th></tr></thead>
           <tbody>
             {% for record in records %}
@@ -338,20 +311,6 @@
         }
       }
     }
-
-    // Tablo başlıklarını td'lere data-label olarak ekle (mobil kart görünümü için)
-    function makeTablesResponsive() {
-      const tables = document.querySelectorAll('table.responsive');
-      tables.forEach(table => {
-        const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
-        table.querySelectorAll('tbody tr').forEach(tr => {
-          Array.from(tr.children).forEach((td, i) => {
-            td.setAttribute('data-label', headers[i] || '');
-          });
-        });
-      });
-    }
-    document.addEventListener('DOMContentLoaded', makeTablesResponsive);
 
     // Ses tanıma
     const micButton = document.getElementById('mic-button');
@@ -455,21 +414,27 @@
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      const isSmall = window.matchMedia('(max-width: 768px)').matches;
       const calendarEl = document.getElementById('calendar');
 
       const calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: isSmall ? 'listWeek' : 'dayGridMonth',
+        initialView: 'dayGridMonth',       // → her cihazda AYLIK başlasın
         locale: 'tr',
+        buttonText: {                      // → Türkçe buton metinleri
+          today: 'Bugün',
+          month: 'Ay',
+          week: 'Hafta',
+          day: 'Gün',
+          list: 'Liste'
+        },
         height: 'auto',
         contentHeight: 'auto',
         expandRows: true,
         dayMaxEvents: true,
-        aspectRatio: isSmall ? 1 : 1.35,
+        aspectRatio: 1.35,
         headerToolbar: {
           left: 'prev,next today',
           center: 'title',
-          right: isSmall ? 'listWeek,dayGridMonth' : 'dayGridMonth,timeGridWeek,listWeek'
+          right: 'dayGridMonth,timeGridWeek,listWeek'
         },
         events: [
           {% for record in records %}
@@ -505,7 +470,7 @@
           alert(lines.join('\n'));
         },
 
-        /* Masaüstü için hover tooltip (dokunmatiklerde devre dışı) */
+        /* Masaüstü için hover tooltip */
         eventMouseEnter: function(info) {
           if (matchMedia('(hover: hover)').matches === false) return;
           const event = info.event;
@@ -546,13 +511,6 @@
       });
 
       calendar.render();
-
-      // Ekran boyutu değişince uygun görünüme geç
-      window.addEventListener('resize', () => {
-        const smallNow = window.matchMedia('(max-width: 768px)').matches;
-        const desired = smallNow ? 'listWeek' : 'dayGridMonth';
-        if (calendar.view.type !== desired) calendar.changeView(desired);
-      });
     });
   </script>
 </body>
