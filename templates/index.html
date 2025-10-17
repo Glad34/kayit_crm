@@ -6,122 +6,82 @@
 <title>Emlak Asistanı</title>
 
 <!-- FullCalendar CSS -->
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.css" rel="stylesheet">
 
 <style>
 :root {
   --primary: #007bff;
-  --primary-light: #4da3ff;
   --light-bg: #f4f7f9;
   --border: #e0e0e0;
-  --radius: 12px;
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --transition: 0.3s ease;
-  --success: #28a745;
-  --danger: #dc3545;
-  --text-dark: #222;
-  --text-muted: #666;
-  --white: #fff;
+  --radius: 10px;
 }
 
-/* === GENEL === */
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background-color: var(--light-bg);
-  color: var(--text-dark);
+  color: #333;
   margin: 0;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-/* === Kullanıcı Bilgisi === */
 .user-info {
   position: absolute;
-  top: 15px;
+  top: 10px;
   right: 20px;
-  background: var(--white);
-  padding: 10px 18px;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  font-size: 14px;
   text-align: right;
-  color: var(--text-muted);
-  transition: var(--transition);
-}
-.user-info a {
-  color: var(--primary);
-  text-decoration: none;
-  font-weight: 500;
-}
-.user-info a:hover {
-  text-decoration: underline;
+  z-index: 10;
+  font-size: 14px;
 }
 
-/* === KONTEYNER === */
+/* === ANA KAPSAYICI === */
 .container {
   display: flex;
   flex-wrap: wrap;
-  margin-top: 80px;
-  gap: 20px;
-  justify-content: center;
-  padding: 0 20px 50px;
+  margin-top: 60px;
 }
 
 /* === SOL PANEL === */
 .left-panel {
-  flex: 1 1 320px;
-  max-width: 380px;
+  flex: 1 1 300px;
+  max-width: 360px;
   padding: 25px;
-  background: var(--white);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  transition: var(--transition);
-}
-.left-panel h1 {
-  margin: 0 0 10px 0;
-  font-size: 22px;
-  color: var(--text-dark);
+  border-right: 1px solid var(--border);
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
 }
 
-/* === Mikrofon Butonu === */
 #mic-button {
-  width: 110px;
-  height: 110px;
+  width: 100px;
+  height: 100px;
   border-radius: 50%;
-  background: linear-gradient(145deg, var(--primary), var(--primary-light));
+  background-color: var(--primary);
   border: none;
   cursor: pointer;
   display: flex;
   justify-content: center;
   align-items: center;
-  box-shadow: 0 8px 16px rgba(0,0,0,0.15);
-  transition: 0.25s ease;
-  position: relative;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  margin-bottom: 20px;
+  transition: 0.3s;
 }
-#mic-button:hover { transform: scale(1.05); }
-#mic-button.recording { background: #dc3545; animation: pulse 1.5s infinite; }
+#mic-button:hover { background-color: #0056b3; }
+#mic-button.recording { background-color: #dc3545; animation: pulse 1.5s infinite; }
+
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 rgba(220,53,69,0.5); }
   70% { box-shadow: 0 0 0 20px rgba(220,53,69,0); }
   100% { box-shadow: 0 0 0 0 rgba(220,53,69,0); }
 }
 
-/* + İkonu */
-#mic-button::before {
-  content: "+";
-  position: absolute;
-  font-size: 50px;
-  color: white;
-  line-height: 0;
-  font-weight: 300;
+#mic-icon {
+  width: 50px;
+  height: 50px;
+  background-color: white;
+  -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><path d="M192 0C139 0 96 43 96 96V256c0 53 43 96 96 96s96-43 96-96V96c0-53-43-96-96-96zM64 216c0-13.3-10.7-24-24-24s-24 10.7-24 24v40c0 89.1 66.2 162.7 152 174.4V464H120c-13.3 0-24 10.7-24 24s10.7 24 24 24h144c13.3 0 24-10.7 24-24s-10.7-24-24-24H216V430.4c85.8-11.7 152-85.3 152-174.4V216c0-13.3-10.7-24-24-24s-24 10.7-24 24v40c0 70.7-57.3 128-128 128s-128-57.3-128-128V216z"/></svg>') center / contain no-repeat;
 }
 
-/* === Transcript Alanı === */
 #transcript-output {
   width: 100%;
   border: 1px solid #ddd;
@@ -129,169 +89,155 @@ body {
   padding: 15px;
   font-size: 15px;
   min-height: 130px;
-  margin-top: 15px;
-  box-shadow: inset 0 1px 4px rgba(0,0,0,0.08);
-  background: #fafafa;
-  transition: var(--transition);
-}
-#transcript-output:focus {
-  outline: none;
-  border-color: var(--primary);
-  background: var(--white);
-  box-shadow: 0 0 0 2px rgba(0,123,255,0.15);
+  box-sizing: border-box;
+  resize: vertical;
 }
 
-.reminders {
-  margin-top: 15px;
-  text-align: center;
-}
+.reminders { margin-top: 10px; text-align: center; }
 .badge {
   display: inline-block;
   background-color: #eef1f3;
   color: #333;
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: 12px;
   font-size: 12px;
-  margin: 4px;
+  margin: 3px;
 }
-
-/* === Onayla / İptal Butonları === */
-#confirmation-buttons {
-  display: none;
-  margin-top: 20px;
-}
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: var(--radius);
-  font-size: 15px;
-  margin: 5px;
-  cursor: pointer;
-  box-shadow: var(--shadow);
-  transition: all 0.2s ease;
-}
-.btn:hover { transform: translateY(-2px); }
-#btn-yes { background: var(--success); color: white; }
-#btn-no { background: var(--danger); color: white; }
-#btn-yes:hover { background: #34ce57; }
-#btn-no:hover { background: #e74c3c; }
 
 /* === SAĞ PANEL === */
 .right-panel {
-  flex: 3 1 650px;
+  flex: 3 1 600px;
   padding: 25px;
-  background: var(--white);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  background: #fff;
+  border-left: 1px solid var(--border);
   box-sizing: border-box;
-  transition: var(--transition);
 }
 
 .section-title {
-  border-left: 5px solid var(--primary);
-  padding-left: 10px;
+  border-bottom: 2px solid var(--primary);
+  padding-bottom: 5px;
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-dark);
   margin-top: 0;
   margin-bottom: 15px;
 }
 
-/* === TABLOLAR === */
 .table-container {
-  overflow-x: auto;
+  max-height: 35vh;
+  overflow-y: auto;
+  border: 1px solid #ddd;
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  background: var(--white);
-  margin-bottom: 25px;
 }
 table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
 }
+th, td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #eee;
+}
 thead th {
-  background: var(--primary);
-  color: #fff;
-  padding: 10px;
-  text-align: left;
-}
-td {
-  padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
-}
-tbody tr:hover {
-  background-color: #f8f9ff;
+  background: #f8f9fa;
+  position: sticky;
+  top: 0;
 }
 
-/* === Filtreler === */
 .filters {
   display: flex;
-  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 10px;
 }
 .filters input {
   flex: 1;
-  padding: 10px;
+  padding: 8px;
   border: 1px solid #ccc;
   border-radius: var(--radius);
   font-size: 13px;
-  transition: var(--transition);
-}
-.filters input:focus {
-  border-color: var(--primary);
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(0,123,255,0.15);
 }
 
 /* === TAKVİM === */
 #calendar {
   margin-top: 30px;
+  border: 1px solid #ddd;
   border-radius: var(--radius);
-  background: var(--white);
-  box-shadow: var(--shadow);
-  padding: 15px;
-  width: 100%;
+  padding: 10px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
 /* === MOBİL === */
-@media (max-width: 768px) {
-  body { font-size: 15px; }
-  .container { flex-direction: column; padding: 0 10px; }
+@media (max-width: 992px) {
+  .container { flex-direction: column; }
   .left-panel, .right-panel {
     max-width: 100%;
-    border-radius: var(--radius);
-    box-shadow: none;
-  }
-  #mic-button { width: 90px; height: 90px; }
-  .filters { flex-direction: column; }
-  .filters input { width: 100%; }
-  
-  /* Tablolar mobilde kart haline gelir */
-  table, thead, tbody, th, td, tr { display: block; width: 100%; }
-  thead { display: none; }
-  tbody tr {
-    background: var(--white);
-    margin-bottom: 15px;
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    padding: 10px 15px;
-  }
-  td {
     border: none;
-    display: flex;
-    justify-content: space-between;
-    padding: 6px 0;
-    font-size: 14px;
+    border-bottom: 1px solid var(--border);
   }
-  td::before {
-    content: attr(data-label);
-    font-weight: 600;
-    color: var(--text-muted);
-  }
+  #calendar { margin-bottom: 30px; }
+  .section-title { text-align: center; }
 }
 
+#confirmation-buttons {
+  display: none;
+}
+
+.fc-tooltip {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* Flex çocuklarının dar ekranda 0px'e sıkışmasını engelle */
+.right-panel { min-width: 0; }
+
+/* Tablo: mobilde kart gibi dikey dizilsin (başlıklar sol etikete dönüşür) */
+@media (max-width: 768px) {
+  .table-container { max-height: unset; } /* mobilde sabit yükseklik kısıtını kaldır */
+  table.responsive { 
+    border: 0; 
+  }
+  table.responsive thead {
+    display: none; /* başlık gizlenir, td:before ile gösterilecek */
+  }
+  table.responsive, 
+  table.responsive tbody, 
+  table.responsive tr, 
+  table.responsive td {
+    display: block;
+    width: 100%;
+  }
+  table.responsive tr {
+    background: #fff;
+    margin: 0 0 12px 0;
+    border: 1px solid #eee;
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+  table.responsive td {
+    border: 0;
+    border-bottom: 1px dashed #eee;
+    padding: 8px 6px;
+  }
+  table.responsive td:last-child {
+    border-bottom: 0;
+  }
+  table.responsive td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    display: block;
+    margin-bottom: 4px;
+    color: #555;
+  }
+
+  /* FullCalendar mobil ayarları */
+  .fc .fc-toolbar-title { font-size: 1.1rem; }
+  .fc .fc-toolbar-chunk { flex-wrap: wrap; gap: 6px; }
+  #calendar { padding: 6px; }
+}
+
+/* Yatay kaydırma alternatifi (kart düzenini istemezsen, tabloya .scrollable ekleyebilirsin) */
+.table-container.scrollable { overflow-x: auto; }
+table.scrollable { min-width: 640px; }
 
 </style>
 </head>
@@ -333,7 +279,7 @@ tbody tr:hover {
       <input type="text" onkeyup="filterTable('tasks-table', 2, this)" placeholder="Müşteriye göre...">
     </div>
     <div class="table-container">
-      <table id="tasks-table">
+      <table id="tasks-table" class="responsive">
         <thead><tr><th>Tarih</th><th>Aksiyon</th><th>Müşteri</th></tr></thead>
         <tbody>
           {% for record in records %}
@@ -358,7 +304,7 @@ tbody tr:hover {
       <input type="text" onkeyup="filterTable('results-table', 4, this)" placeholder="Bütçeye göre...">
     </div>
     <div class="table-container">
-      <table id="results-table">
+      <table id="results-table" class="responsive">
         <thead><tr><th>Kaynak</th><th>Müşteri</th><th>İlçe</th><th>Mahalle</th><th>Bütçe</th></tr></thead>
         <tbody>
           {% for record in records %}
@@ -380,12 +326,8 @@ tbody tr:hover {
   </div>
 </div>
 
-<!-- ==================== SCRIPTLER ==================== -->
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
 
-<script>
-
-
+    <script>
         function filterTable(tableId, columnIndex, inputElement) {
             const table = document.getElementById(tableId);
             const tr = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
@@ -499,19 +441,44 @@ tbody tr:hover {
                 statusMessage.textContent = 'Sunucuya bağlanırken bir hata oluştu.';
             }
         });
-    
+    </script>
+
+
+    <script>
+/* Tablo başlıklarını alıp her td’ye data-label olarak yaz */
+function makeTablesResponsive() {
+  const tables = document.querySelectorAll('table.responsive');
+  tables.forEach(table => {
+    const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
+    table.querySelectorAll('tbody tr').forEach(tr => {
+      Array.from(tr.children).forEach((td, i) => {
+        td.setAttribute('data-label', headers[i] || '');
+      });
+    });
+  });
+}
+document.addEventListener('DOMContentLoaded', makeTablesResponsive);
+</script>
+
+    <!-- FullCalendar JS -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.js"></script>
+<script>
 document.addEventListener('DOMContentLoaded', function() {
+  const isSmall = window.matchMedia('(max-width: 768px)').matches;
   const calendarEl = document.getElementById('calendar');
-  if (!calendarEl) return;
 
   const calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: 'dayGridMonth',
+    initialView: isSmall ? 'listWeek' : 'dayGridMonth',
     locale: 'tr',
     height: 'auto',
+    contentHeight: 'auto',
+    expandRows: true,
+    dayMaxEvents: true,
+    aspectRatio: isSmall ? 1 : 1.35,
     headerToolbar: {
       left: 'prev,next today',
       center: 'title',
-      right: 'dayGridMonth,timeGridWeek,listWeek'
+      right: isSmall ? 'listWeek,dayGridMonth' : 'dayGridMonth,timeGridWeek,listWeek'
     },
     events: [
       {% for record in records %}
@@ -534,7 +501,22 @@ document.addEventListener('DOMContentLoaded', function() {
     eventColor: '#007bff',
     eventTextColor: 'white',
 
+    /* Dokunmatik cihazlarda hover yerine tıkla → bilgi göster */
+    eventClick: function(info) {
+      const e = info.event;
+      const lines = [
+        e.title,
+        'Müşteri: ' + (e.extendedProps.musteri || '-'),
+        'Telefon: ' + (e.extendedProps.telefon || '-'),
+        'Konum: ' + (e.extendedProps.konum || '-') + ' / ' + (e.extendedProps.mahalle || '-'),
+        'Not: ' + (e.extendedProps.notlar || '-')
+      ];
+      alert(lines.join('\n'));
+    },
+
+    /* Masaüstü için hover tooltip (mevcut kodun daha güvenli versiyonu) */
     eventMouseEnter: function(info) {
+      if (matchMedia('(hover: hover)').matches === false) return; // dokunmatiklerde açma
       const event = info.event;
       const tooltip = document.createElement('div');
       tooltip.classList.add('fc-tooltip');
@@ -546,15 +528,17 @@ document.addEventListener('DOMContentLoaded', function() {
         <b>Not:</b> ${event.extendedProps.notlar}
       `;
       document.body.appendChild(tooltip);
-      tooltip.style.position = 'absolute';
-      tooltip.style.background = 'rgba(0,0,0,0.8)';
-      tooltip.style.color = 'white';
-      tooltip.style.padding = '8px 12px';
-      tooltip.style.borderRadius = '6px';
-      tooltip.style.fontSize = '13px';
-      tooltip.style.pointerEvents = 'none';
-      tooltip.style.transition = '0.1s';
-      tooltip.style.zIndex = 9999;
+      Object.assign(tooltip.style, {
+        position: 'absolute',
+        background: 'rgba(0,0,0,0.85)',
+        color: '#fff',
+        padding: '8px 12px',
+        borderRadius: '6px',
+        fontSize: '13px',
+        pointerEvents: 'none',
+        transition: '0.1s',
+        zIndex: 9999
+      });
 
       const moveTooltip = (e) => {
         tooltip.style.left = e.pageX + 10 + 'px';
@@ -566,16 +550,22 @@ document.addEventListener('DOMContentLoaded', function() {
       info.el.addEventListener('mouseleave', () => {
         tooltip.remove();
         document.removeEventListener('mousemove', moveTooltip);
-      });
+      }, { once: true });
     }
   });
 
+  /* ÖNEMLİ: render() çağrısı olmazsa bazı cihazlarda hiç görünmeyebilir */
   calendar.render();
+
+  /* Ekran döndürmede / boyut değişince görünümü güncelle */
+  window.addEventListener('resize', () => {
+    const smallNow = window.matchMedia('(max-width: 768px)').matches;
+    const desired = smallNow ? 'listWeek' : 'dayGridMonth';
+    if (calendar.view.type !== desired) calendar.changeView(desired);
+  });
 });
 </script>
 
+
 </body>
 </html>
-
-
-
