@@ -162,6 +162,11 @@ def index():
             print(f"E-Tablodan veri çekerken hata oluştu: {e}")
     return render_template('index.html', records=records)
 
+@app.route('/service-worker.js')
+def service_worker():
+    return app.send_static_file('service-worker.js')
+
+
 # --- VERİ İŞLEME ROTASI ---
 @app.route('/process', methods=['POST'])
 @login_required
@@ -260,6 +265,9 @@ def process_transcript():
     except Exception as e:
         print(f"\n!!!! HATA !!!!\n{e}\n!!!!!!!!!!!!!!")
         return jsonify({"status": "error", "message": str(e)}), 500
+    
+
+    
 
 if __name__ == '__main__':
     app.run(debug=True)
