@@ -39,6 +39,7 @@ users = {}
 def load_user(user_id):
     return users.get(user_id)
 
+
 # --- OAUTH (GOOGLE İLE GİRİŞ) KURULUMU ---
 oauth = OAuth(app)
 google = oauth.register(
