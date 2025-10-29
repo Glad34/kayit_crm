@@ -1,5 +1,6 @@
 import os
 import json
+import re # Telefon numarasını temizlemek için eklendi
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 from dateutil.parser import parse
@@ -129,7 +130,6 @@ def login():
 def authorize():
     try:
         token = google.authorize_access_token()
-        # Token'ı session'a kaydetmek, bazı ortamlarda Authlib için gereklidir.
         session['user_token'] = token
         user_info = google.get('userinfo').json()
         user_id = user_info['id']
@@ -166,22 +166,83 @@ def index():
 def service_worker():
     return app.send_static_file('service-worker.js')
 
+# YENİ: Telefon numarasını temizleyen yardımcı fonksiyon
+def normalize_phone(phone):
+    if not isinstance(phone, str):
+        phone = str(phone)
+    # Sadece rakamları al
+    return re.sub(r'\D', '', phone)
 
-# --- VERİ İŞLEME ROTASI ---
+# --- VERİ İŞLEME ROTASI (TAMAMEN YENİLENDİ) ---
 @app.route('/process', methods=['POST'])
 @login_required
 def process_transcript():
     try:
         data = request.get_json()
         transcript = data.get('transcript')
-        model = GenerativeModel("gemini-2.5-pro")
+        model = GenerativeModel("gemini-1.5-pro-preview-0409")
         prompt = get_gemini_prompt(transcript)
         response = model.generate_content(prompt)
         cleaned_response_text = response.text.replace("```json", "").replace("```", "").strip()
-        structured_data = json.loads(cleaned_response_text)
+        new_data = json.loads(cleaned_response_text)
         
-        reminder_date_text = structured_data.get("Hatırlatma_Tarihi_Metni", "").lower()
-        reminder_time_text = structured_data.get("Hatırlatma_Saati_Metni", "").lower()
+        structured_data = new_data # Başlangıç değeri olarak ata
+        
+        # Telefon numarasını al ve temizle
+        new_phone = normalize_phone(new_data.get("Telefon", ""))
+
+        # Mevcut kayıtları kontrol et ve güncelleme mantığını uygula
+        record_updated = False
+        if new_phone and worksheet:
+            all_records = worksheet.get_all_records()
+            # E-tabloda arama yaparken sadece danışmana ait kayıtları dikkate al
+            user_records_with_index = [
+                (i + 2, record) for i, record in enumerate(all_records) 
+                if record.get('Danışman_Eposta') == current_user.email
+            ]
+
+            for row_index, existing_record in user_records_with_index:
+                existing_phone = normalize_phone(existing_record.get("Telefon", ""))
+                if existing_phone == new_phone:
+                    # Eşleşme bulundu! Mevcut kaydı yeni verilerle güncelle
+                    
+                    # Notları ve Aksiyonları eskiyi silmeden ekle
+                    timestamp = datetime.now().strftime("%d-%m-%Y %H:%M")
+                    old_notes = existing_record.get("Notlar", "")
+                    new_note = new_data.get("Notlar", "")
+                    if new_note and new_note != "Belirtilmedi":
+                        if old_notes and old_notes != "Belirtilmedi":
+                            existing_record["Notlar"] = f"{old_notes}\n---\n[{timestamp}] {new_note}"
+                        else:
+                            existing_record["Notlar"] = f"[{timestamp}] {new_note}"
+                    
+                    old_aksiyonlar = existing_record.get("Aksiyonlar", "")
+                    new_aksiyon = new_data.get("Aksiyonlar", "")
+                    if new_aksiyon and new_aksiyon != "Belirtilmedi":
+                        if old_aksiyonlar and old_aksiyonlar != "Belirtilmedi":
+                            existing_record["Aksiyonlar"] = f"{old_aksiyonlar}\n---\n[{timestamp}] {new_aksiyon}"
+                        else:
+                            existing_record["Aksiyonlar"] = f"[{timestamp}] {new_aksiyon}"
+
+                    # Diğer alanları güncelle (yeni veri varsa ve "Belirtilmedi" değilse)
+                    for key, value in new_data.items():
+                        if key not in ["Notlar", "Aksiyonlar"] and value and str(value).strip() != "Belirtilmedi":
+                            existing_record[key] = value
+                    
+                    # E-Tablodaki satırı güncellemek için başlık sırasına göre liste oluştur
+                    headers = worksheet.row_values(1)
+                    # Gspread'in update metodu için aralık belirtiyoruz. Örn: 'A2:W2'
+                    update_range = f'A{row_index}:{chr(ord("A")+len(headers)-1)}{row_index}'
+                    row_to_update = [existing_record.get(h, "") for h in headers]
+                    worksheet.update(update_range, [row_to_update])
+                    
+                    record_updated = True
+                    structured_data = existing_record # İstemciye güncellenmiş veriyi gönder
+                    break
+
+        # Takvim etkinliği oluşturma
+        reminder_date_text = new_data.get("Hatırlatma_Tarihi_Metni", "").lower()
+        reminder_time_text = new_data.get("Hatırlatma_Saati_Metni", "").lower()
         reminder_datetime_obj = None
         if reminder_date_text and reminder_date_text != "belirtilmedi":
             now = datetime.now()
@@ -223,51 +284,50 @@ def process_transcript():
             event_start_time = reminder_datetime_obj
             event_end_time = event_start_time + timedelta(hours=1)
             event = {
-                'summary': structured_data.get("Aksiyonlar", "İsimsiz Görev"),
-                'description': f"Müşteri: {structured_data.get('Müşteri_Adı', 'Belirtilmedi')}\nTelefon: {structured_data.get('Telefon', 'Belirtilmedi')}\n\nNotlar:\n{transcript}",
+                'summary': new_data.get("Aksiyonlar", "İsimsiz Görev"),
+                'description': f"Müşteri: {new_data.get('Müşteri_Adı', 'Belirtilmedi')}\nTelefon: {new_data.get('Telefon', 'Belirtilmedi')}\n\nNotlar:\n{transcript}",
                 'start': {'dateTime': event_start_time.isoformat(), 'timeZone': 'Europe/Istanbul'},
                 'end': {'dateTime': event_end_time.isoformat(), 'timeZone': 'Europe/Istanbul'},
             }
             calendar_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
         
-        kayit_tarihi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        reminder_for_sheet = reminder_datetime_obj.strftime("%Y-%m-%d %H:%M") if reminder_datetime_obj else "Belirtilmedi"
-        
-        row_to_insert = [
-            current_user.email,
-            structured_data.get("Kaynak", "Belirtilmedi"),
-            structured_data.get("Müşteri_Adı", "Belirtilmedi"),
-            structured_data.get("Telefon", "Belirtilmedi"),
-            structured_data.get("Oturum_mu_Yatirim_mi", "Belirtilmedi"),
-            structured_data.get("Taraf", "Belirtilmedi"),
-            structured_data.get("Butce", "Belirtilmedi"),
-            structured_data.get("Oda_Sayisi", "Belirtilmedi"),
-            structured_data.get("MetreKare", "Belirtilmedi"),
-            structured_data.get("Bina_Yasi", "Belirtilmedi"),
-            structured_data.get("Kat", "Belirtilmedi"),
-            structured_data.get("Balkon", "Belirtilmedi"),
-            structured_data.get("Asansor", "Belirtilmedi"),
-            structured_data.get("Konum", "Belirtilmedi"),
-            structured_data.get("Mahalle", "Belirtilmedi"),
-            structured_data.get("Havuz", "Belirtilmedi"),
-            structured_data.get("Otopark", "Belirtilmedi"),
-            structured_data.get("Manzara", "Belirtilmedi"),
-            structured_data.get("Notlar", "Belirtilmedi"),
-            structured_data.get("Konut_Tipi", "Belirtilmedi"),
-            kayit_tarihi,
-            structured_data.get("Aksiyonlar", "Belirtilmedi"),
-            reminder_for_sheet
-        ]
-        if worksheet:
+        # Eğer kayıt güncellenmediyse, yeni bir kayıt olarak ekle
+        if not record_updated and worksheet:
+            kayit_tarihi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            reminder_for_sheet = reminder_datetime_obj.strftime("%Y-%m-%d %H:%M") if reminder_datetime_obj else "Belirtilmedi"
+            
+            row_to_insert = [
+                current_user.email,
+                new_data.get("Kaynak", "Belirtilmedi"),
+                new_data.get("Müşteri_Adı", "Belirtilmedi"),
+                new_data.get("Telefon", "Belirtilmedi"),
+                new_data.get("Oturum_mu_Yatirim_mi", "Belirtilmedi"),
+                new_data.get("Taraf", "Belirtilmedi"),
+                new_data.get("Butce", "Belirtilmedi"),
+                new_data.get("Oda_Sayisi", "Belirtilmedi"),
+                new_data.get("MetreKare", "Belirtilmedi"),
+                new_data.get("Bina_Yasi", "Belirtilmedi"),
+                new_data.get("Kat", "Belirtilmedi"),
+                new_data.get("Balkon", "Belirtilmedi"),
+                new_data.get("Asansor", "Belirtilmedi"),
+                new_data.get("Konum", "Belirtilmedi"),
+                new_data.get("Mahalle", "Belirtilmedi"),
+                new_data.get("Havuz", "Belirtilmedi"),
+                new_data.get("Otopark", "Belirtilmedi"),
+                new_data.get("Manzara", "Belirtilmedi"),
+                new_data.get("Notlar", "Belirtilmedi"),
+                new_data.get("Konut_Tipi", "Belirtilmedi"),
+                kayit_tarihi,
+                new_data.get("Aksiyonlar", "Belirtilmedi"),
+                reminder_for_sheet
+            ]
             worksheet.append_row(row_to_insert, value_input_option='USER_ENTERED')
+            structured_data = new_data
         
         return jsonify({"status": "success", "data": structured_data})
     except Exception as e:
         print(f"\n!!!! HATA !!!!\n{e}\n!!!!!!!!!!!!!!")
         return jsonify({"status": "error", "message": str(e)}), 500
-    
-
-    
 
 if __name__ == '__main__':
     app.run(debug=True)
