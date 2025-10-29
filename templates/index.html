@@ -333,7 +333,7 @@ if ("serviceWorker" in navigator) {
 
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
-      recognition.continuous = true;  // <--- BU ŞEKİLDE DEĞİŞTİRİN
+      recognition.continuous = true;
       recognition.lang = 'tr-TR';
       recognition.interimResults = true;
       let isRecording = false;
@@ -354,37 +354,26 @@ if ("serviceWorker" in navigator) {
       });
 
       recognition.onresult = (event) => {
-        let final_transcript = '';
-
-        // Döngüyü, bize API'ın "yeni sonuçlar buradan başlıyor" dediği
-        // event.resultIndex'ten başlatıyoruz.
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          // Eğer sonuç nihai olarak işaretlenmişse (ki mobil bunu sık sık yapar)
+        let finalTranscriptPart = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            // Sadece bu YENİ sonucu mevcut metnin sonuna ekle.
-            final_transcript += event.results[i][0].transcript;
+            finalTranscriptPart = transcript + ' ';
           }
         }
-
-        // Eğer yeni bir nihai metin varsa, onu textarea'ya ekle.
-        // Başına bir boşluk koyarak kelimelerin birleşmesini önlüyoruz.
-        if (final_transcript) {
-            transcriptTextarea.value += ' ' + final_transcript;
-            // Metin kutusunun en başındaki olası boşluğu temizle
-            transcriptTextarea.value = transcriptTextarea.value.trim();
-        }
-
-        // Kaydırma çubuğunu en alta indir
+        transcriptTextarea.value += finalTranscriptPart;
         transcriptTextarea.scrollTop = transcriptTextarea.scrollHeight;
       };
 
       recognition.onend = () => {
-        // Artık sadece kaydı manuel durdurunca çalışır.
-        // isRecording durumu zaten click event'inde false yapıldığı için tekrar kontrole gerek yok.
-        micButton.classList.remove('recording');
-        transcriptTextarea.placeholder = 'Mikrofon butonuna basıp konuşmaya başlayın...';
-        if (transcriptTextarea.value.trim().length > 0) {
-          confirmationButtons.style.display = 'block';
+        if (isRecording) {
+          recognition.start();
+        } else {
+          micButton.classList.remove('recording');
+          transcriptTextarea.placeholder = 'Mikrofon butonuna basıp konuşmaya başlayın...';
+          if (transcriptTextarea.value.trim().length > 0) {
+            confirmationButtons.style.display = 'block';
+          }
         }
       };
 
