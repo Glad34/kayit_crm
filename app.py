@@ -180,7 +180,7 @@ def process_transcript():
     try:
         data = request.get_json()
         transcript = data.get('transcript')
-        model = GenerativeModel("gemini-1.5-pro-preview-0409")
+        model = GenerativeModel("gemini-2.5-pro")
         prompt = get_gemini_prompt(transcript)
         response = model.generate_content(prompt)
         cleaned_response_text = response.text.replace("```json", "").replace("```", "").strip()
