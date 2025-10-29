@@ -274,24 +274,34 @@ if ("serviceWorker" in navigator) {
         </table>
       </div>
 
+      <!-- YENİLENMİŞ BÖLÜM BAŞLANGICI -->
       <h2 class="section-title" style="margin-top:30px;">Tüm Kayıtlarım</h2>
       <div class="filters">
-        <input type="text" onkeyup="filterTable('results-table', 0, this)" placeholder="Kaynağa göre...">
-        <input type="text" onkeyup="filterTable('results-table', 1, this)" placeholder="Müşteriye göre...">
-        <input type="text" onkeyup="filterTable('results-table', 2, this)" placeholder="İlçeye göre...">
-        <input type="text" onkeyup="filterTable('results-table', 3, this)" placeholder="Mahalleye göre...">
-        <input type="text" onkeyup="filterTable('results-table', 4, this)" placeholder="Bütçeye göre...">
+        <input type="text" onkeyup="filterTable('results-table', 0, this)" placeholder="Müşteriye göre ara...">
+        <input type="text" onkeyup="filterTable('results-table', 1, this)" placeholder="Telefona göre ara...">
       </div>
       <div class="table-container scrollable">
         <table id="results-table" class="scrollable">
-          <thead><tr><th>Kaynak</th><th>Müşteri</th><th>İlçe</th><th>Mahalle</th><th>Bütçe</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Müşteri Adı</th>
+              <th>Telefon</th>
+              <th>Notlar</th>
+              <th>Aksiyonlar</th>
+              <th>Kaynak</th>
+              <th>İlçe</th>
+              <th>Bütçe</th>
+            </tr>
+          </thead>
           <tbody>
             {% for record in records %}
             <tr>
-              <td>{{ record.get('Kaynak','N/A') }}</td>
               <td>{{ record.get('Müşteri_Adı','N/A') }}</td>
+              <td>{{ record.get('Telefon','N/A') }}</td>
+              <td>{{ record.get('Notlar','N/A') }}</td>
+              <td>{{ record.get('Aksiyonlar','N/A') }}</td>
+              <td>{{ record.get('Kaynak','N/A') }}</td>
               <td>{{ record.get('Konum','N/A') }}</td>
-              <td>{{ record.get('Mahalle','N/A') }}</td>
               <td>{{ record.get('Butce','N/A') }}</td>
             </tr>
             {% endfor %}
@@ -310,7 +320,6 @@ if ("serviceWorker" in navigator) {
       const table = document.getElementById(tableId);
       const tr = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
       const filter = inputElement.value.toUpperCase();
-
       for (let i = 0; i < tr.length; i++) {
         const td = tr[i].getElementsByTagName("td")[columnIndex];
         if (td) {
@@ -319,99 +328,72 @@ if ("serviceWorker" in navigator) {
         }
       }
     }
-
-    // --- FİNAL VE KESİNTİSİZ SES TANIMA KODU ---
-
     const micButton = document.getElementById('mic-button');
     const transcriptTextarea = document.getElementById('transcript-output');
     const confirmationButtons = document.getElementById('confirmation-buttons');
     const btnYes = document.getElementById('btn-yes');
     const btnNo = document.getElementById('btn-no');
     const statusMessage = document.getElementById('status-message');
-
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition;
-
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
-      
-      // 1. KESİNTİSİZ DİNLEME İÇİN BU AYAR 'true' OLMALI.
-      recognition.continuous = true;
+      recognition.continuous = false;
       recognition.lang = 'tr-TR';
       recognition.interimResults = true;
-
       let isRecording = false;
-
       micButton.addEventListener('click', () => {
         isRecording = !isRecording;
         if (isRecording) {
-          transcriptTextarea.value = ''; // Metin kutusunu temizle
-          recognition.start(); // Kaydı başlat
+          transcriptTextarea.value = '';
+          recognition.start();
           micButton.classList.add('recording');
           transcriptTextarea.placeholder = 'Dinliyorum...';
           statusMessage.textContent = '';
           confirmationButtons.style.display = 'none';
         } else {
-          // Kullanıcı butona basarak durdurdu
-          recognition.stop(); // Kaydı DURDUR
+          recognition.stop();
           micButton.classList.remove('recording');
         }
       });
-
-      // 2. MOBİLDE TEKRAR YAZMAYI ÖNLEYEN YENİ KOD
       recognition.onresult = (event) => {
         let final_transcript = '';
-        let interim_transcript = '';
-
-        // Gelen tüm sonuçları baştan sona döngüye al
-        for (let i = 0; i < event.results.length; i++) {
-          // Sonucun metin kısmını al
-          const transcript_part = event.results[i][0].transcript;
-          
-          // Sonuç 'nihai' (final) olarak işaretlenmişse
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
-            final_transcript += transcript_part;
-          } else {
-            // Henüz 'nihai' değilse (anlık sonuç ise)
-            interim_transcript += transcript_part;
+            final_transcript += event.results[i][0].transcript;
           }
         }
-        
-        // Metin kutusunun içeriğini her seferinde SIFIRDAN OLUŞTUR.
-        // Bu, += ile eklemenin neden olduğu tekrar yazma sorununu çözer.
-        transcriptTextarea.value = final_transcript + interim_transcript;
+        if (final_transcript) {
+            transcriptTextarea.value += ' ' + final_transcript;
+            transcriptTextarea.value = transcriptTextarea.value.trim();
+        }
         transcriptTextarea.scrollTop = transcriptTextarea.scrollHeight;
       };
-
-      // 3. 'BİP' SESİNİ KALDIRAN BASİTLEŞTİRİLMİŞ 'onend' FONKSİYONU
       recognition.onend = () => {
-        // Bu fonksiyon artık sadece recognition.stop() çağrıldığında çalışır.
-        // Otomatik yeniden başlatma yok, dolayısıyla 'bip' sesi de yok.
-        isRecording = false; // Kayıt durumunu güncelle
-        micButton.classList.remove('recording');
-        transcriptTextarea.placeholder = 'Mikrofon butonuna basıp konuşmaya başlayın...';
-        if (transcriptTextarea.value.trim().length > 0) {
-          confirmationButtons.style.display = 'block';
+        if (isRecording) {
+          recognition.start();
+        } else {
+          micButton.classList.remove('recording');
+          transcriptTextarea.placeholder = 'Mikrofon butonuna basıp konuşmaya başlayın...';
+          if (transcriptTextarea.value.trim().length > 0) {
+            confirmationButtons.style.display = 'block';
+          }
         }
       };
-
       recognition.onerror = (event) => {
         console.error("Speech Recognition Error", event.error);
         isRecording = false;
         micButton.classList.remove('recording');
       }
-
     } else {
       micButton.disabled = true;
       transcriptTextarea.placeholder = "Tarayıcınız ses tanıma özelliğini desteklemiyor."
     }
-
     btnNo.addEventListener('click', () => {
       transcriptTextarea.value = '';
       transcriptTextarea.placeholder = 'İptal edildi. Tekrar denemek için mikrofona basın.';
       confirmationButtons.style.display = 'none';
     });
-
     btnYes.addEventListener('click', async () => {
       statusMessage.textContent = 'İşleniyor, lütfen bekleyin...';
       confirmationButtons.style.display = 'none';
