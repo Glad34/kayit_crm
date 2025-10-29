@@ -354,25 +354,27 @@ if ("serviceWorker" in navigator) {
       });
 
       recognition.onresult = (event) => {
-        let finalTranscript = '';
-        let interimTranscript = '';
+        let final_transcript = '';
 
-        // event.results listesindeki tüm parçaları döngüye alarak
-        // nihai metni her seferinde baştan oluşturuyoruz.
-        for (let i = 0; i < event.results.length; i++) {
-          const transcriptPart = event.results[i][0].transcript;
+        // Döngüyü, bize API'ın "yeni sonuçlar buradan başlıyor" dediği
+        // event.resultIndex'ten başlatıyoruz.
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          // Eğer sonuç nihai olarak işaretlenmişse (ki mobil bunu sık sık yapar)
           if (event.results[i].isFinal) {
-            // Nihai olanları birleştir.
-            finalTranscript += transcriptPart;
-          } else {
-            // Henüz nihai olmayan (anlık tanınan) kısmı al.
-            interimTranscript = transcriptPart;
+            // Sadece bu YENİ sonucu mevcut metnin sonuna ekle.
+            final_transcript += event.results[i][0].transcript;
           }
         }
 
-        // Metin kutusunun değerini, birleştirilmiş nihai sonuç ve
-        // anlık sonuç ile tamamen GÜNCELLE. (+= yerine = kullan)
-        transcriptTextarea.value = finalTranscript + interimTranscript;
+        // Eğer yeni bir nihai metin varsa, onu textarea'ya ekle.
+        // Başına bir boşluk koyarak kelimelerin birleşmesini önlüyoruz.
+        if (final_transcript) {
+            transcriptTextarea.value += ' ' + final_transcript;
+            // Metin kutusunun en başındaki olası boşluğu temizle
+            transcriptTextarea.value = transcriptTextarea.value.trim();
+        }
+
+        // Kaydırma çubuğunu en alta indir
         transcriptTextarea.scrollTop = transcriptTextarea.scrollHeight;
       };
 
