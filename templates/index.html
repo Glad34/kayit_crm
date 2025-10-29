@@ -333,7 +333,7 @@ if ("serviceWorker" in navigator) {
 
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
-      recognition.continuous = false;
+      recognition.continuous = true;  // <--- BU ŞEKİLDE DEĞİŞTİRİN
       recognition.lang = 'tr-TR';
       recognition.interimResults = true;
       let isRecording = false;
@@ -366,14 +366,12 @@ if ("serviceWorker" in navigator) {
       };
 
       recognition.onend = () => {
-        if (isRecording) {
-          recognition.start();
-        } else {
-          micButton.classList.remove('recording');
-          transcriptTextarea.placeholder = 'Mikrofon butonuna basıp konuşmaya başlayın...';
-          if (transcriptTextarea.value.trim().length > 0) {
-            confirmationButtons.style.display = 'block';
-          }
+        // Artık sadece kaydı manuel durdurunca çalışır.
+        // isRecording durumu zaten click event'inde false yapıldığı için tekrar kontrole gerek yok.
+        micButton.classList.remove('recording');
+        transcriptTextarea.placeholder = 'Mikrofon butonuna basıp konuşmaya başlayın...';
+        if (transcriptTextarea.value.trim().length > 0) {
+          confirmationButtons.style.display = 'block';
         }
       };
 
