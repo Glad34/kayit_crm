@@ -354,14 +354,25 @@ if ("serviceWorker" in navigator) {
       });
 
       recognition.onresult = (event) => {
-        let finalTranscriptPart = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        // event.results listesindeki tüm parçaları döngüye alarak
+        // nihai metni her seferinde baştan oluşturuyoruz.
+        for (let i = 0; i < event.results.length; i++) {
+          const transcriptPart = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            finalTranscriptPart = transcript + ' ';
+            // Nihai olanları birleştir.
+            finalTranscript += transcriptPart;
+          } else {
+            // Henüz nihai olmayan (anlık tanınan) kısmı al.
+            interimTranscript = transcriptPart;
           }
         }
-        transcriptTextarea.value += finalTranscriptPart;
+
+        // Metin kutusunun değerini, birleştirilmiş nihai sonuç ve
+        // anlık sonuç ile tamamen GÜNCELLE. (+= yerine = kullan)
+        transcriptTextarea.value = finalTranscript + interimTranscript;
         transcriptTextarea.scrollTop = transcriptTextarea.scrollHeight;
       };
 
