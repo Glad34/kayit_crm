@@ -320,7 +320,8 @@ if ("serviceWorker" in navigator) {
       }
     }
 
-    // Ses tanıma
+    // --- YENİ VE GELİŞTİRİLMİŞ SES TANIMA KODU ---
+
     const micButton = document.getElementById('mic-button');
     const transcriptTextarea = document.getElementById('transcript-output');
     const confirmationButtons = document.getElementById('confirmation-buttons');
@@ -333,14 +334,22 @@ if ("serviceWorker" in navigator) {
 
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
+      // AYAR 1: Tekrarlamayı önlemek için 'false' kalacak. Bu doğru.
       recognition.continuous = false;
       recognition.lang = 'tr-TR';
+      // AYAR 2: Konuşurken anlık sonuçları görmek için 'true' kalacak.
       recognition.interimResults = true;
+
+      // Bu değişken, kaydın kullanıcı tarafından mı yoksa tarayıcı tarafından mı durdurulduğunu takip eder.
       let isRecording = false;
+      // Bu değişken, kesintiler olsa bile tüm metni bir arada tutar.
+      let finalTranscriptHolder = '';
 
       micButton.addEventListener('click', () => {
         isRecording = !isRecording;
         if (isRecording) {
+          // Kayıt başladığında her şeyi sıfırla
+          finalTranscriptHolder = '';
           transcriptTextarea.value = '';
           recognition.start();
           micButton.classList.add('recording');
@@ -348,52 +357,53 @@ if ("serviceWorker" in navigator) {
           statusMessage.textContent = '';
           confirmationButtons.style.display = 'none';
         } else {
+          // Kullanıcı butona basarak durdurdu
           recognition.stop();
           micButton.classList.remove('recording');
+          // Onay butonlarını göster
+          if (transcriptTextarea.value.trim().length > 0) {
+            confirmationButtons.style.display = 'block';
+          }
         }
       });
 
       recognition.onresult = (event) => {
-        let final_transcript = '';
-
-        // Döngüyü, bize API'ın "yeni sonuçlar buradan başlıyor" dediği
-        // event.resultIndex'ten başlatıyoruz.
+        let interim_transcript = '';
+        // event.results listesindeki tüm parçaları döngüye al
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-          // Eğer sonuç nihai olarak işaretlenmişse (ki mobil bunu sık sık yapar)
           if (event.results[i].isFinal) {
-            // Sadece bu YENİ sonucu mevcut metnin sonuna ekle.
-            final_transcript += event.results[i][0].transcript;
+            // Sadece nihai sonucu ana metin tutucuya ekle
+            finalTranscriptHolder += event.results[i][0].transcript;
+          } else {
+            // Henüz nihai olmayanları geçici değişkene ekle
+            interim_transcript += event.results[i][0].transcript;
           }
         }
-
-        // Eğer yeni bir nihai metin varsa, onu textarea'ya ekle.
-        // Başına bir boşluk koyarak kelimelerin birleşmesini önlüyoruz.
-        if (final_transcript) {
-            transcriptTextarea.value += ' ' + final_transcript;
-            // Metin kutusunun en başındaki olası boşluğu temizle
-            transcriptTextarea.value = transcriptTextarea.value.trim();
-        }
-
-        // Kaydırma çubuğunu en alta indir
+        // Kullanıcıya anlık olarak ne dediğini göster (bütün metin + anlık metin)
+        transcriptTextarea.value = finalTranscriptHolder + interim_transcript;
         transcriptTextarea.scrollTop = transcriptTextarea.scrollHeight;
       };
 
+      // EN ÖNEMLİ DEĞİŞİKLİK BURADA
       recognition.onend = () => {
+        // Eğer kayıt durumu hala 'true' ise, bu, kullanıcının değil,
+        // tarayıcının sessizlik nedeniyle durdurduğu anlamına gelir.
+        // Bu durumda, kullanıcıya hissettirmeden kaydı hemen yeniden başlat.
         if (isRecording) {
           recognition.start();
         } else {
+          // Eğer isRecording 'false' ise, kullanıcı butona basarak durdurmuştur.
+          // Normal şekilde bitir ve placeholder'ı güncelle.
           micButton.classList.remove('recording');
           transcriptTextarea.placeholder = 'Mikrofon butonuna basıp konuşmaya başlayın...';
-          if (transcriptTextarea.value.trim().length > 0) {
-            confirmationButtons.style.display = 'block';
-          }
         }
       };
 
       recognition.onerror = (event) => {
         console.error("Speech Recognition Error", event.error);
-        isRecording = false;
+        isRecording = false; // Hata durumunda kaydı durdur
         micButton.classList.remove('recording');
+        transcriptTextarea.placeholder = 'Bir hata oluştu. Tekrar deneyin.';
       }
 
     } else {
@@ -403,6 +413,7 @@ if ("serviceWorker" in navigator) {
 
     btnNo.addEventListener('click', () => {
       transcriptTextarea.value = '';
+      finalTranscriptHolder = ''; // Metin tutucuyu da sıfırla
       transcriptTextarea.placeholder = 'İptal edildi. Tekrar denemek için mikrofona basın.';
       confirmationButtons.style.display = 'none';
     });
