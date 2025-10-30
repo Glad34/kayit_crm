@@ -328,6 +328,84 @@ def process_transcript():
     except Exception as e:
         print(f"\n!!!! HATA !!!!\n{e}\n!!!!!!!!!!!!!!")
         return jsonify({"status": "error", "message": str(e)}), 500
+    
+
+    # app.py dosyasının en altına, diğer fonksiyonların dışına ekleyin
+
+def get_jarvis_prompt(records_json, today_date):
+    return f"""
+    SENARYO: Sen, bir gayrimenkul danışmanına koçluk yapan 'Jarvis' adında bir yapay zeka asistanısın. Görevin, danışmanın tüm CRM veritabanını analiz ederek ona bugüne özel, önceliklendirilmiş ve eyleme dönük bir görev listesi hazırlamaktır. Bir gayrimenkul uzmanı gibi düşünmeli, fırsatları ve riskleri görmelisin.
+
+    ## KESİN KURALLAR ##
+    1.  **Bugünün Tarihi:** {today_date}
+    2.  **Önceliklendirme Mantığı:**
+        *   **ACİL (Yüksek Öncelik):** Hatırlatma tarihi BUGÜN olan veya geçmişte kalmış (vadesi geçmiş) tüm görevler. Bunları listenin en başına koy. Örn: "VADESİ GEÇTİ: [Müşteri Adı]'nı ara."
+        *   **FIRSAT (Orta Öncelik):** Yeni eklenmiş (son 1-2 gün), bütçesi yüksek veya yatırım amaçlı müşterilere "Hoş geldin/Tanışma" araması öner. Örn: "YENİ MÜŞTERİ: [Müşteri Adı] ile ilk teması kur (Bütçe: [Bütçe])."
+        *   **TAKİP (Düşük Öncelik):** Bir süredir işlem görmemiş (örn: 1-2 haftadır yeni not eklenmemiş) müşterilere "hatır sorma" veya "yeni portföy var mı?" araması öner. Örn: "TAKİP ET: [Müşteri Adı]'nın arayışı ne durumda? Güncel bilgi al."
+        *   **GENEL (Düşük Öncelik):** Bütçesi belirtilmemiş veya notları eksik olan kayıtlar için bilgi tamamlama görevi öner. Örn: "BİLGİ GÜNCELLE: [Müşteri Adı]'nın bütçesini ve aradığı m2'yi netleştir."
+    3.  **Çıktı Formatı:** Cevabın SADECE aşağıdakine benzer bir JSON formatında olmalı. Her görev için bir 'task' (görev metni) ve bir 'priority' ('Yüksek', 'Orta', 'Düşük') alanı olmalı. Başka hiçbir açıklama, giriş veya sonuç cümlesi ekleme.
+
+    İŞLENECEK VERİTABANI (JSON FORMATINDA):
+    {records_json}
+
+    İSTENEN JSON ÇIKTISI (ÖRNEK):
+    [
+      {{
+        "task": "VADESİ GEÇTİ: Sercan Bey'i mutlaka ara (Dünkü randevu için).",
+        "priority": "Yüksek"
+      }},
+      {{
+        "task": "BUGÜN ARANACAK: Ayşe Hanım'a saat 14:00'teki randevuyu teyit et.",
+        "priority": "Yüksek"
+      }},
+      {{
+        "task": "YENİ FIRSAT: Yüksek bütçeli yeni müşteri Ali Veli ile tanışma araması yap.",
+        "priority": "Orta"
+      }},
+      {{
+        "task": "TAKİP ET: 2 haftadır haber alınamayan Zeynep Hanım'ın arayış durumunu sor.",
+        "priority": "Düşük"
+      }}
+    ]
+    """
+
+# app.py dosyasının en altına, if __name__ == '__main__': satırının hemen üstüne ekleyin
+
+@app.route('/get_daily_tasks')
+@login_required
+def get_daily_tasks():
+    if not worksheet:
+        return jsonify([]) # E-tabloya ulaşılamazsa boş liste döndür
+
+    try:
+        all_data = worksheet.get_all_records()
+        user_email = current_user.email
+        user_records = [rec for rec in all_data if rec.get('Danışman_Eposta') == user_email]
+
+        if not user_records:
+            return jsonify([{"task": "Harika! Bugün için bekleyen özel bir göreviniz yok. Yeni kayıtlar ekleyebilirsiniz.", "priority": "Orta"}])
+
+        # Veriyi yapay zekanın anlayacağı formata çevir
+        records_json_str = json.dumps(user_records, indent=2, ensure_ascii=False)
+        today_date_str = datetime.now().strftime("%Y-%m-%d")
+        
+        model = GenerativeModel("gemini-1.5-pro-preview-0409")
+        prompt = get_jarvis_prompt(records_json_str, today_date_str)
+        
+        response = model.generate_content(prompt)
+        
+        # Yanıtı temizle ve JSON'a çevir
+        cleaned_response_text = response.text.replace("```json", "").replace("```", "").strip()
+        tasks = json.loads(cleaned_response_text)
+        
+        return jsonify(tasks)
+
+    except Exception as e:
+        print(f"Jarvis görevi oluşturulurken hata: {e}")
+        # Hata durumunda kullanıcıya bilgilendirici bir mesaj gönder
+        error_task = [{"task": f"Görevler oluşturulurken bir hata oluştu: {e}", "priority": "Yüksek"}]
+        return jsonify(error_task), 500
+    
 
 if __name__ == '__main__':
     app.run(debug=True)
