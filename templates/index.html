@@ -218,6 +218,61 @@ if ("serviceWorker" in navigator) {
       .fc .fc-toolbar-title { font-size: 1.1rem; }
       .fc .fc-toolbar-chunk { flex-wrap: wrap; gap: 6px; }
     }
+
+
+
+
+
+
+    /* === JARVIS GÖREV PANELİ === */
+.jarvis-panel {
+  background-color: #fdfdff;
+  border: 1px solid #e9e9f3;
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 30px;
+}
+#jarvis-task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 250px;
+  overflow-y: auto;
+}
+#jarvis-task-list li {
+  padding: 10px 5px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  transition: color 0.3s;
+}
+#jarvis-task-list li:last-child {
+  border-bottom: none;
+}
+#jarvis-task-list input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+#jarvis-task-list label {
+  margin: 0;
+}
+#jarvis-task-list li.completed label {
+  text-decoration: line-through;
+  color: #888;
+}
+.priority-badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 600;
+}
+.priority-Yüksek { background-color: #dc3545; }
+.priority-Orta { background-color: #ffc107; color: #333; }
+.priority-Düşük { background-color: #17a2b8; }
   </style>
 </head>
 <body>
@@ -251,6 +306,25 @@ if ("serviceWorker" in navigator) {
 
     <!-- Sağ Panel -->
     <div class="right-panel">
+
+
+    <!-- Sağ Panel -->
+    <div class="right-panel">
+
+      <!-- YENİ JARVIS PANELİ BAŞLANGICI -->
+      <div class="jarvis-panel">
+        <h2 class="section-title" style="margin-top:0;">🤖 Günlük Görev Planım (Jarvis)</h2>
+        <div id="jarvis-loading">Görevler analiz ediliyor, lütfen bekleyin...</div>
+        <ul id="jarvis-task-list">
+          <!-- Görevler buraya JavaScript ile eklenecek -->
+        </ul>
+      </div>
+      <!-- YENİ JARVIS PANELİ SONU -->
+
+      <h2 class="section-title">Yaklaşan Görevlerim</h2>
+      <!-- ... (sitenizin geri kalanı aynı şekilde devam ediyor) ... -->
+
+
       <h2 class="section-title">Yaklaşan Görevlerim</h2>
       <div class="filters">
         <input type="text" onkeyup="filterTable('tasks-table', 0, this)" placeholder="Tarihe göre...">
@@ -519,6 +593,71 @@ if ("serviceWorker" in navigator) {
       });
 
       calendar.render();
+    });
+
+
+
+
+
+
+    // ... btnYes.addEventListener(...) fonksiyonunun bittiği yerin altına ekleyin ...
+
+    // --- JARVIS GÖREVLERİNİ ÇEKEN VE GÖSTEREN KOD ---
+    document.addEventListener('DOMContentLoaded', function() {
+      const taskList = document.getElementById('jarvis-task-list');
+      const loadingIndicator = document.getElementById('jarvis-loading');
+
+      async function fetchDailyTasks() {
+        try {
+          const response = await fetch('/get_daily_tasks');
+          if (!response.ok) {
+            throw new Error('Sunucudan görevler alınamadı.');
+          }
+          const tasks = await response.json();
+
+          loadingIndicator.style.display = 'none';
+          taskList.innerHTML = ''; // Listeyi temizle
+
+          if (tasks.length === 0) {
+            const li = document.createElement('li');
+            li.textContent = 'Bugün için planlanmış bir görev bulunamadı.';
+            taskList.appendChild(li);
+            return;
+          }
+
+          tasks.forEach((task, index) => {
+            const li = document.createElement('li');
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `task-${index}`;
+            
+            const label = document.createElement('label');
+            label.htmlFor = `task-${index}`;
+            label.textContent = task.task;
+
+            // Öncelik rozeti oluştur
+            const priorityBadge = document.createElement('span');
+            priorityBadge.textContent = task.priority;
+            priorityBadge.className = `priority-badge priority-${task.priority}`;
+
+            li.appendChild(checkbox);
+            li.appendChild(label);
+            li.appendChild(priorityBadge);
+
+            checkbox.addEventListener('change', function() {
+              li.classList.toggle('completed', this.checked);
+            });
+
+            taskList.appendChild(li);
+          });
+
+        } catch (error) {
+          loadingIndicator.textContent = 'Görevler yüklenirken bir hata oluştu.';
+          console.error('Fetch Daily Tasks Error:', error);
+        }
+      }
+
+      fetchDailyTasks();
     });
   </script>
 </body>
