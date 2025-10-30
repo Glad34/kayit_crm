@@ -389,7 +389,7 @@ def get_daily_tasks():
         records_json_str = json.dumps(user_records, indent=2, ensure_ascii=False)
         today_date_str = datetime.now().strftime("%Y-%m-%d")
         
-        model = GenerativeModel("gemini-1.5-pro-preview-0409")
+        model = GenerativeModel("gemini-2.5-pro")
         prompt = get_jarvis_prompt(records_json_str, today_date_str)
         
         response = model.generate_content(prompt)
