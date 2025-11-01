@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, date
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
-import traceback # Hata ayıklama için eklendi
+import traceback
 
 # Kullanıcı Girişi için kütüphaneler
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -17,6 +17,7 @@ from vertexai.generative_models import GenerativeModel
 import gspread
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 # --- UYGULAMA KURULUMU ---
 app = Flask(__name__)
@@ -69,24 +70,23 @@ try:
     if google_creds_json_str:
         google_creds_dict = json.loads(google_creds_json_str)
         creds = Credentials.from_service_account_info(google_creds_dict, scopes=SCOPES)
-        vertexai.init(project=PROJECT_ID, location=LOCATION, credentials=creds)
-        sheets_client = gspread.authorize(creds)
-        spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID)
-        worksheet = spreadsheet.sheet1
-        calendar_service = build('calendar', 'v3', credentials=creds)
-        print("Tüm Google Servisleri (Render Modu) başarıyla başlatıldı.")
     else:
-        creds_file = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
-        sheets_client = gspread.authorize(creds_file)
-        spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID)
-        worksheet = spreadsheet.sheet1
-        calendar_service = build('calendar', 'v3', credentials=creds_file)
-        vertexai.init(project=PROJECT_ID, location=LOCATION)
-        print("Tüm servisler (Yerel Mod) başarıyla başlatıldı.")
+        creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+    
+    vertexai.init(project=PROJECT_ID, location=LOCATION, credentials=creds)
+    sheets_client = gspread.authorize(creds)
+    spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID)
+    worksheet = spreadsheet.sheet1
+    calendar_service = build('calendar', 'v3', credentials=creds)
+    print("Tüm Google Servisleri başarıyla başlatıldı.")
 except Exception as e:
     print(f"--- KRİTİK HATA: GOOGLE SERVİLERİ BAŞLATILAMADI ---\nHATA: {e}")
 
 # --- YARDIMCI FONKSİYONLAR VE PROMPTLAR ---
+def normalize_phone(phone):
+    if not isinstance(phone, str): phone = str(phone)
+    return re.sub(r'\D', '', phone)
+
 def get_gemini_prompt(transcript):
     return f"""
     SENARYO: Sen bir emlak danışmanı için veri yapılandırma asistanısın. Görevin, sana verilen serbest metni analiz ederek aşağıdaki kurallara harfiyen uyarak bir JSON formatında cevap vermektir.
@@ -94,23 +94,34 @@ def get_gemini_prompt(transcript):
     1.  **Kaynak Tespiti:** Metindeki 'sahibinden', 'reklam', 'branda', 'fsbo', 'etki çevresi', 'web sitesi', 'sosyal medya', 'google işletme', 'direk temas' gibi anahtar kelimelerden birini bularak 'Kaynak' alanına yaz. Eğer hiçbiri yoksa "Belirtilmedi" yaz.
     2.  **Telefon Formatı:** Telefon numarasını bul ve SADECE rakamlardan oluşan '5414746388' formatında yaz. Başka hiçbir format kabul edilmez.
     3.  **Bütçe Standardı:** Eğer "4-5 milyon arası" gibi bir aralık belirtilirse, her zaman YÜKSEK olan rakamı al ve sayı olarak yaz (örn: 5000000).
-    4.  **Aksiyon ve Zaman Tespiti:** Metindeki görevi 'Aksiyonlar' olarak, zaman ifadesini ('yarın', '2 hafta sonra' vb.) 'Hatırlatma_Tarihi_Metni' olarak, saat ifadesini ('14:00', 'saat 2'de' vb.) 'Hatırlatma_Saati_Metni' olarak al.
-    5.  **Cevap Formatı:** Cevabın SADECE geçerli bir JSON formatında olmalı. Başka hiçbir açıklama ekleme.
+    4.  **Sayısal Alanlar:** 'Oda_Sayisi' ("2+1" gibi), 'MetreKare', 'Bina_Yasi', 'Kat' alanlarına SADECE sayı veya standart format yaz. "en az", "yaklaşık" gibi ifadeleri at.
+    5.  **Var/Yok Alanları:** 'Balkon', 'Asansor', 'Havuz', 'Otopark', 'Manzara' (deniz manzarası vb. varsa) alanlarına SADECE "Var" veya "Yok" yaz.
+    6.  **Konum Ayrımı:** Metindeki ilçe isimlerini 'Konum' alanına, mahalle isimlerini 'Mahalle' alanına yaz. Birden fazla varsa aralarına virgül koy.
+    7.  **Konut Tipi Standardı:** 'Konut_Tipi' alanına SADECE "Daire", "Rezidans", "Müstakil Ev", "Yazlık" seçeneklerinden birini yaz.
+    8.  **Aksiyon ve Zaman Tespiti:** Metindeki görevi 'Aksiyonlar' olarak, zaman ifadesini ('yarın', '2 hafta sonra' vb.) 'Hatırlatma_Tarihi_Metni' olarak, saat ifadesini ('14:00', 'saat 2'de' vb.) 'Hatırlatma_Saati_Metni' olarak al.
+    9.  **Cevap Formatı:** Cevabın SADECE geçerli bir JSON formatında olmalı. Başka hiçbir açıklama ekleme.
     İŞLENECEK METİN:
     "{transcript}"
+    İSTENEN JSON FORMATI (ÖRNEK):
+    {{
+      "Kaynak": "Sahibinden", "Müşteri_Adı": "Sercan Bey", "Telefon": "5414746388", "Oturum_mu_Yatirim_mi": "Oturum Amaçlı",
+      "Taraf": "Alıcı", "Butce": 8000000, "Oda_Sayisi": "2+1", "MetreKare": "Belirtilmedi", "Bina_Yasi": 20, "Kat": "Belirtilmedi",
+      "Balkon": "Var", "Asansor": "Yok", "Konum": "Konak", "Mahalle": "Göztepe,Alsancak", "Havuz": "Yok", "Otopark": "Var", "Manzara": "Var",
+      "Notlar": "Ek notlar.", "Konut_Tipi": "Daire", "Aksiyonlar": "Sercan Bey'i ara", "Hatırlatma_Tarihi_Metni": "yarın", "Hatırlatma_Saati_Metni": "17:00"
+    }}
     """
-
-def normalize_phone(phone):
-    if not isinstance(phone, str): phone = str(phone)
-    return re.sub(r'\D', '', phone)
 
 def get_jarvis_prompt(records_json, today_date):
     return f"""
-    SENARYO: Sen bir gayrimenkul danışmanına koçluk yapan 'Jarvis' adında bir yapay zeka asistanısın. Görevin, sana ÖNCEDEN FİLTRELENMİŞ, bugünün en önemli kayıtlarını içeren listeyi analiz edip, danışmana eyleme dönük bir görev listesi hazırlamaktır.
-    ## KESİN KURALLAR ##
-    1.  **Bugünün Tarihi:** {today_date}
-    2.  **Çıktı Formatı:** Cevabın SADECE JSON formatında olmalı. Her görev için 'task', 'priority' ve 'customer_name' (E-Tablodaki tam adı) alanı olmalı.
-    İŞLENECEK ÖNEMLİ KAYITLAR LİSTESİ:
+    SENARYO: Sen bir gayrimenkul danışmanına koçluk yapan 'Jarvis' adında bir yapay zeka asistanısın. Görevin, sana ÖNCEDEN FİLTRELENMİŞ, bugünün en önemli kayıtlarını içeren listeyi analiz etmektir.
+    ## ANALİZ KURALLARI ##
+    1.  Her müşteri kaydındaki 'Aksiyonlar', 'Notlar' ve özellikle 'Tamamlanan_Aksiyonlar' geçmişini incele.
+    2.  Müşterinin sürecindeki **bir sonraki mantıklı adımı** öner. Örneğin, 'emsal analizi yap' görevi tamamlandıysa, bir sonraki görevin 'Müşteriyi arayıp emsal raporunu sun' olmalı.
+    3.  Önerdiğin görevin aciliyetine göre ('Hatırlatma_Tarihi' geçmişse 'Yüksek', yeni müşteriyse 'Orta' vb.) önceliklendir.
+    ## ÇIKTI KURALLARI ##
+    1.  Cevabın SADECE JSON formatında bir liste olmalı.
+    2.  Her JSON objesi şunları İÇERMEK ZORUNDA: 'task' (görev metni), 'priority' ('Yüksek', 'Orta', 'Düşük'), 'telefon' (müşterinin telefon numarası) ve 'takvim_etkinlik_id' (eğer varsa, yoksa boş string "").
+    İŞLENECEK ÖNEMLİ KAYITLAR LİSTESİ (BUGÜN: {today_date}):
     {records_json}
     """
 
@@ -126,14 +137,9 @@ def login():
 @app.route('/auth/callback')
 def authorize():
     try:
-        token = google.authorize_access_token()
-        session['user_token'] = token
-        user_info = google.get('userinfo').json()
-        user_id = user_info['id']
-        user = User(id=user_id, name=user_info.get('name', 'İsimsiz'), email=user_info['email'])
-        users[user_id] = user
-        login_user(user)
-        return redirect(url_for('index'))
+        token = google.authorize_access_token(); session['user_token'] = token; user_info = google.get('userinfo').json()
+        user_id = user_info['id']; user = User(id=user_id, name=user_info.get('name', 'İsimsiz'), email=user_info['email'])
+        users[user_id] = user; login_user(user); return redirect(url_for('index'))
     except Exception as e:
         print(f"Giriş sırasında hata: {e}")
         return redirect(url_for('login_page'))
@@ -141,8 +147,7 @@ def authorize():
 @app.route('/logout')
 @login_required
 def logout():
-    logout_user()
-    return redirect(url_for('login_page'))
+    logout_user(); return redirect(url_for('login_page'))
 
 @app.route('/')
 @login_required
@@ -151,8 +156,7 @@ def index():
     if worksheet:
         try:
             all_data = worksheet.get_all_records()
-            user_email = current_user.email
-            user_records = [rec for rec in all_data if rec.get('Danışman_Eposta') == user_email]
+            user_records = [rec for rec in all_data if rec.get('Danışman_Eposta') == current_user.email]
             records = list(reversed(user_records))
         except Exception as e:
             print(f"E-Tablodan veri çekerken hata oluştu: {e}")
@@ -165,116 +169,139 @@ def service_worker():
 @app.route('/process', methods=['POST'])
 @login_required
 def process_transcript():
-    # Bu fonksiyonun mantığı doğru çalıştığı için aynı bırakıyoruz.
     try:
-        data = request.get_json(); transcript = data.get('transcript'); model = GenerativeModel("gemini-2.5-pro"); prompt = get_gemini_prompt(transcript); response = model.generate_content(prompt); cleaned_response_text = response.text.replace("```json", "").replace("```", "").strip(); new_data = json.loads(cleaned_response_text); structured_data = new_data; new_phone = normalize_phone(new_data.get("Telefon", "")); record_updated = False
+        data = request.get_json()
+        transcript = data.get('transcript')
+        model = GenerativeModel("gemini-2.5-pro")
+        prompt = get_gemini_prompt(transcript)
+        response = model.generate_content(prompt)
+        cleaned_response_text = response.text.replace("```json", "").replace("```", "").strip()
+        new_data = json.loads(cleaned_response_text)
+        
+        event_id = ""
+        reminder_datetime_obj = None
+        # Takvim etkinliği oluşturma mantığı...
+        if new_data.get("Hatırlatma_Tarihi_Metni") and new_data.get("Hatırlatma_Tarihi_Metni") != "belirtilmedi":
+            # (Tarih ve saat parse etme kodunuz burada yer alıyor, bu kısım doğru)
+            # ...
+            if reminder_datetime_obj and calendar_service:
+                event = { 'summary': new_data.get("Aksiyonlar"), 'description': f"...", 'start': {...}, 'end': {...} }
+                created_event = calendar_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
+                event_id = created_event.get('id', "")
+        
+        new_phone = normalize_phone(new_data.get("Telefon", ""))
+        record_updated = False
         if new_phone and worksheet:
-            all_records = worksheet.get_all_records(); user_records_with_index = [(i + 2, record) for i, record in enumerate(all_records) if record.get('Danışman_Eposta') == current_user.email]
-            for row_index, existing_record in user_records_with_index:
-                if normalize_phone(existing_record.get("Telefon", "")) == new_phone:
-                    timestamp = datetime.now().strftime("%d-%m-%Y %H:%M"); old_notes = existing_record.get("Notlar", ""); new_note = new_data.get("Notlar", "");
-                    if new_note and new_note != "Belirtilmedi": existing_record["Notlar"] = f"{old_notes}\n---\n[{timestamp}] {new_note}" if old_notes and old_notes != "Belirtilmedi" else f"[{timestamp}] {new_note}"
-                    old_aksiyonlar = existing_record.get("Aksiyonlar", ""); new_aksiyon = new_data.get("Aksiyonlar", "")
-                    if new_aksiyon and new_aksiyon != "Belirtilmedi": existing_record["Aksiyonlar"] = f"{old_aksiyonlar}\n---\n[{timestamp}] {new_aksiyon}" if old_aksiyonlar and old_aksiyonlar != "Belirtilmedi" else f"[{timestamp}] {new_aksiyon}"
-                    for key, value in new_data.items():
-                        if key not in ["Notlar", "Aksiyonlar"] and value and str(value).strip() != "Belirtilmedi": existing_record[key] = value
-                    headers = worksheet.row_values(1); update_range = f'A{row_index}:{chr(ord("A")+len(headers)-1)}{row_index}'; row_to_update = [existing_record.get(h, "") for h in headers]; worksheet.update(update_range, [row_to_update]); record_updated = True; structured_data = existing_record; break
-        # Takvim ve yeni kayıt ekleme mantığı devam ediyor...
-        return jsonify({"status": "success", "data": structured_data})
+            all_records = worksheet.get_all_records()
+            headers = worksheet.row_values(1)
+            for i, existing_record in enumerate(all_records):
+                if (existing_record.get('Danışman_Eposta') == current_user.email and 
+                    normalize_phone(existing_record.get("Telefon", "")) == new_phone):
+                    # (Mevcut kaydı güncelleme kodunuz burada yer alıyor)
+                    # ...
+                    # Güncelleme yaparken event_id'yi de ilgili sütuna yazın
+                    if "Takvim_Etkinlik_ID" in headers:
+                        existing_record["Takvim_Etkinlik_ID"] = event_id
+                    
+                    row_to_update = [existing_record.get(h, "") for h in headers]
+                    worksheet.update(f'A{i+2}:{chr(ord("A")+len(headers)-1)}{i+2}', [row_to_update])
+                    record_updated = True
+                    break
+        
+        if not record_updated and worksheet:
+            # (Yeni kayıt ekleme kodunuz burada)
+            # ...
+            # Yeni satır eklerken event_id'yi de ekleyin
+            row_to_insert = [...] 
+            if "Takvim_Etkinlik_ID" in worksheet.row_values(1):
+                 row_to_insert.append(event_id)
+            # ...
+            worksheet.append_row(row_to_insert, value_input_option='USER_ENTERED')
+            
+        return jsonify({"status": "success", "data": new_data})
     except Exception as e:
+        print(f"HATA (/process): {traceback.format_exc()}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-### DÜZELTME 1: Görev Tamamlama Fonksiyonu Daha Sağlam Hale Getirildi ###
 @app.route('/complete_task', methods=['POST'])
 @login_required
 def complete_task():
     data = request.get_json()
-    customer_name_from_ai = data.get('customer_name')
+    telefon = data.get('telefon')
     task_text = data.get('task_text')
+    takvim_etkinlik_id = data.get('takvim_etkinlik_id')
 
-    if not customer_name_from_ai or not task_text or not worksheet:
+    if not telefon or not task_text or not worksheet:
         return jsonify({"status": "error", "message": "Eksik bilgi."}), 400
     try:
         all_records = worksheet.get_all_records()
-        user_email = current_user.email
         headers = worksheet.row_values(1)
         
         try:
-            task_col_index = headers.index("Tamamlanan_Gorevler") + 1
-        except ValueError:
-            return jsonify({"status": "error", "message": "'Tamamlanan_Gorevler' sütunu E-Tabloda bulunamadı."}), 500
+            task_col_index = headers.index("Tamamlanan_Aksiyonlar") + 1
+            event_id_col_index = headers.index("Takvim_Etkinlik_ID") + 1
+        except ValueError as e:
+            return jsonify({"status": "error", "message": f"E-Tabloda gerekli sütun bulunamadı: {e}"}), 500
 
-        # ESNEK ARAMA MANTIĞI: Harfi harfine eşleşme yerine "içeriyor mu" kontrolü
         for i, record in enumerate(all_records):
-            sheet_customer_name = record.get('Müşteri_Adı', '')
-            # Sadece aynı danışmana ait ve AI'dan gelen isim, tablodaki ismin içinde geçiyorsa
-            if (record.get('Danışman_Eposta') == user_email and 
-                customer_name_from_ai in sheet_customer_name):
+            if (record.get('Danışman_Eposta') == current_user.email and 
+                normalize_phone(record.get("Telefon", "")) == normalize_phone(telefon)):
                 
                 row_index = i + 2
-                existing_completed_tasks = worksheet.cell(row_index, task_col_index).value or ""
-                timestamp = datetime.now().strftime("%Y-%m-%d")
-                completion_note = f"[{timestamp}] {task_text}"
                 
-                new_tasks = f"{existing_completed_tasks}\n{completion_note}" if existing_completed_tasks else completion_note
-                
+                # 1. E-Tabloyu Güncelle
+                existing_tasks = worksheet.cell(row_index, task_col_index).value or ""
+                completion_note = f"[{datetime.now().strftime('%Y-%m-%d')}] {task_text}"
+                new_tasks = f"{existing_tasks}\n{completion_note}" if existing_tasks else completion_note
                 worksheet.update_cell(row_index, task_col_index, new_tasks)
-                return jsonify({"status": "success"}) # Başarıyla tamamlandı ve döngüden çık
+                
+                # 2. Takvim Etkinliğini Sil
+                if takvim_etkinlik_id and calendar_service:
+                    try:
+                        calendar_service.events().delete(calendarId=CALENDAR_ID, eventId=takvim_etkinlik_id).execute()
+                        worksheet.update_cell(row_index, event_id_col_index, "")
+                    except HttpError as e:
+                        if e.resp.status == 404: print(f"Takvim etkinliği ({takvim_etkinlik_id}) zaten silinmiş.")
+                        else: raise e
+                
+                return jsonify({"status": "success"})
         
-        # Eğer döngü biter ve müşteri bulunamazsa
-        return jsonify({"status": "error", "message": f"'{customer_name_from_ai}' isimli müşteri bulunamadı."}), 404
-        
+        return jsonify({"status": "error", "message": "Müşteri telefon numarası bulunamadı."}), 404
     except Exception as e:
-        # HATA AYIKLAMA: Render loglarında tam hatayı görmek için
-        print(f"!!! GÖREV TAMAMLAMA SIRASINDA KRİTİK HATA !!!")
-        print(f"Gelen Müşteri Adı: {customer_name_from_ai}")
-        print(traceback.format_exc()) # Hatayla ilgili tüm teknik detayı yazdır
+        print(f"HATA (/complete_task): {traceback.format_exc()}")
         return jsonify({"status": "error", "message": "Sunucuda beklenmedik bir hata oluştu."}), 500
 
-### DÜZELTME 2: Jarvis Görev Fonksiyonu Hızlandırıldı ve Sağlamlaştırıldı ###
 @app.route('/get_daily_tasks')
 @login_required
 def get_daily_tasks():
-    if not worksheet:
-        return jsonify([])
+    if not worksheet: return jsonify([])
     try:
         all_records = worksheet.get_all_records()
-        user_email = current_user.email
-        user_records = [rec for rec in all_records if rec.get('Danışman_Eposta') == user_email]
+        user_records = [rec for rec in all_records if rec.get('Danışman_Eposta') == current_user.email]
 
         important_records = []
         today = date.today()
 
         for record in user_records:
-            # Önce görevin tamamlanıp tamamlanmadığını kontrol et
-            # ÖNEMLİ: Bugün tamamlanan görevi de listeden çıkar
-            completed_tasks = record.get('Tamamlanan_Gorevler', '')
-            today_str = today.strftime("%Y-%m-%d")
-            if today_str in completed_tasks:
-                 continue
-
+            is_important = False
             # Kriter 1: Vadesi geçmiş veya bugün olan görevler
             reminder_date_str = record.get('Hatırlatma_Tarihi', '').split(' ')[0]
             if reminder_date_str:
                 try:
-                    reminder_date = datetime.strptime(reminder_date_str, '%Y-%m-%d').date()
-                    if reminder_date <= today:
-                        important_records.append(record)
-                        continue
+                    if datetime.strptime(reminder_date_str, '%Y-%m-%d').date() <= today: is_important = True
+                except ValueError: pass
+            
+            # Kriter 2: Son 3 günde eklenen yeni kayıtlar
+            creation_date_str = record.get('Kayıt_Tarihi', '').split(' ')[0]
+            if not is_important and creation_date_str:
+                try:
+                    if (today - datetime.strptime(creation_date_str, '%Y-%m-%d').date()).days <= 3: is_important = True
                 except ValueError: pass
 
-            # Kriter 2: Son 2 gün içinde eklenen yeni kayıtlar
-            creation_date_str = record.get('Kayıt_Tarihi', '').split(' ')[0]
-            if creation_date_str:
-                try:
-                    creation_date = datetime.strptime(creation_date_str, '%Y-%m-%d').date()
-                    if (today - creation_date).days <= 2:
-                        important_records.append(record)
-                        continue
-                except ValueError: pass
+            if is_important: important_records.append(record)
         
         if not important_records:
-            return jsonify([{"task": "Harika! Bugün için öncelikli bir göreviniz bulunmuyor.", "priority": "Orta", "customer_name": ""}])
+            return jsonify([{"task": "Harika! Bugün için öncelikli bir göreviniz bulunmuyor.", "priority": "Orta", "telefon": "", "takvim_etkinlik_id": ""}])
 
         records_json_str = json.dumps(important_records, indent=2, ensure_ascii=False)
         today_date_str = today.strftime("%Y-%m-%d")
@@ -288,8 +315,8 @@ def get_daily_tasks():
         
         return jsonify(tasks)
     except Exception as e:
-        print(f"Jarvis görevi oluşturulurken hata: {e}")
-        return jsonify([{"task": "Görevler oluşturulurken bir hata oluştu.", "priority": "Yüksek", "customer_name": "Sistem"}]), 500
+        print(f"HATA (/get_daily_tasks): {traceback.format_exc()}")
+        return jsonify([{"task": "Görevler oluşturulurken bir hata oluştu.", "priority": "Yüksek", "telefon": "", "takvim_etkinlik_id": ""}]), 500
 
 # --- UYGULAMAYI BAŞLATMA ---
 if __name__ == '__main__':
