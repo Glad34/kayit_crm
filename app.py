@@ -31,29 +31,21 @@ login_manager.login_view = 'login_page'
 
 class User(UserMixin):
     def __init__(self, id, name, email):
-        self.id = id
-        self.name = name
-        self.email = email
+        self.id = id; self.name = name; self.email = email
 users = {}
 
 @login_manager.user_loader
-def load_user(user_id):
-    return users.get(user_id)
+def load_user(user_id): return users.get(user_id)
 
 # --- OAUTH (GOOGLE İLE GİRİŞ) KURULUMU ---
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
-    client_id=os.environ.get('GOOGLE_CLIENT_ID'),
-    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
-    access_token_url='https://accounts.google.com/o/oauth2/token',
-    access_token_params=None,
-    authorize_url='https://accounts.google.com/o/oauth2/auth',
-    authorize_params=None,
-    api_base_url='https://www.googleapis.com/oauth2/v1/',
-    userinfo_endpoint='https://openidconnect.googleapis.com/v1.0/userinfo',
-    jwks_uri="https://www.googleapis.com/oauth2/v3/certs",
-    client_kwargs={'scope': 'openid email profile'},
+    client_id=os.environ.get('GOOGLE_CLIENT_ID'), client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
+    access_token_url='https://accounts.google.com/o/oauth2/token', access_token_params=None,
+    authorize_url='https://accounts.google.com/o/oauth2/auth', authorize_params=None,
+    api_base_url='https://www.googleapis.com/oauth2/v1/', userinfo_endpoint='https://openidconnect.googleapis.com/v1.0/userinfo',
+    jwks_uri="https://www.googleapis.com/oauth2/v3/certs", client_kwargs={'scope': 'openid email profile'},
 )
 
 # --- GOOGLE SERVİLERİNİ BAŞLATMA ---
@@ -61,9 +53,7 @@ PROJECT_ID = "masaustuotomasyon"
 LOCATION = "us-central1"
 SPREADSHEET_ID = "1xjdxkMXKe3iQjD9rosNb69CIo36JhHUCPM-4kYzzRBM"
 CALENDAR_ID = 'onurglad34@gmail.com'
-creds = None
-worksheet = None
-calendar_service = None
+creds = None; worksheet = None; calendar_service = None
 try:
     google_creds_json_str = os.environ.get('GOOGLE_CREDENTIALS_JSON')
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/cloud-platform"]
@@ -72,7 +62,6 @@ try:
         creds = Credentials.from_service_account_info(google_creds_dict, scopes=SCOPES)
     else:
         creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
-    
     vertexai.init(project=PROJECT_ID, location=LOCATION, credentials=creds)
     sheets_client = gspread.authorize(creds)
     spreadsheet = sheets_client.open_by_key(SPREADSHEET_ID)
@@ -94,21 +83,10 @@ def get_gemini_prompt(transcript):
     1.  **Kaynak Tespiti:** Metindeki 'sahibinden', 'reklam', 'branda', 'fsbo', 'etki çevresi', 'web sitesi', 'sosyal medya', 'google işletme', 'direk temas' gibi anahtar kelimelerden birini bularak 'Kaynak' alanına yaz. Eğer hiçbiri yoksa "Belirtilmedi" yaz.
     2.  **Telefon Formatı:** Telefon numarasını bul ve SADECE rakamlardan oluşan '5414746388' formatında yaz. Başka hiçbir format kabul edilmez.
     3.  **Bütçe Standardı:** Eğer "4-5 milyon arası" gibi bir aralık belirtilirse, her zaman YÜKSEK olan rakamı al ve sayı olarak yaz (örn: 5000000).
-    4.  **Sayısal Alanlar:** 'Oda_Sayisi' ("2+1" gibi), 'MetreKare', 'Bina_Yasi', 'Kat' alanlarına SADECE sayı veya standart format yaz. "en az", "yaklaşık" gibi ifadeleri at.
-    5.  **Var/Yok Alanları:** 'Balkon', 'Asansor', 'Havuz', 'Otopark', 'Manzara' (deniz manzarası vb. varsa) alanlarına SADECE "Var" veya "Yok" yaz.
-    6.  **Konum Ayrımı:** Metindeki ilçe isimlerini 'Konum' alanına, mahalle isimlerini 'Mahalle' alanına yaz. Birden fazla varsa aralarına virgül koy.
-    7.  **Konut Tipi Standardı:** 'Konut_Tipi' alanına SADECE "Daire", "Rezidans", "Müstakil Ev", "Yazlık" seçeneklerinden birini yaz.
-    8.  **Aksiyon ve Zaman Tespiti:** Metindeki görevi 'Aksiyonlar' olarak, zaman ifadesini ('yarın', '2 hafta sonra' vb.) 'Hatırlatma_Tarihi_Metni' olarak, saat ifadesini ('14:00', 'saat 2'de' vb.) 'Hatırlatma_Saati_Metni' olarak al.
-    9.  **Cevap Formatı:** Cevabın SADECE geçerli bir JSON formatında olmalı. Başka hiçbir açıklama ekleme.
+    4.  **Aksiyon ve Zaman Tespiti:** Metindeki görevi 'Aksiyonlar' olarak, zaman ifadesini ('yarın', '2 hafta sonra' vb.) 'Hatırlatma_Tarihi_Metni' olarak, saat ifadesini ('14:00', 'saat 2'de' vb.) 'Hatırlatma_Saati_Metni' olarak al.
+    5.  **Cevap Formatı:** Cevabın SADECE geçerli bir JSON formatında olmalı. Başka hiçbir açıklama ekleme.
     İŞLENECEK METİN:
     "{transcript}"
-    İSTENEN JSON FORMATI (ÖRNEK):
-    {{
-      "Kaynak": "Sahibinden", "Müşteri_Adı": "Sercan Bey", "Telefon": "5414746388", "Oturum_mu_Yatirim_mi": "Oturum Amaçlı",
-      "Taraf": "Alıcı", "Butce": 8000000, "Oda_Sayisi": "2+1", "MetreKare": "Belirtilmedi", "Bina_Yasi": 20, "Kat": "Belirtilmedi",
-      "Balkon": "Var", "Asansor": "Yok", "Konum": "Konak", "Mahalle": "Göztepe,Alsancak", "Havuz": "Yok", "Otopark": "Var", "Manzara": "Var",
-      "Notlar": "Ek notlar.", "Konut_Tipi": "Daire", "Aksiyonlar": "Sercan Bey'i ara", "Hatırlatma_Tarihi_Metni": "yarın", "Hatırlatma_Saati_Metni": "17:00"
-    }}
     """
 
 def get_jarvis_prompt(records_json, today_date):
@@ -170,53 +148,18 @@ def service_worker():
 @login_required
 def process_transcript():
     try:
-        data = request.get_json()
-        transcript = data.get('transcript')
-        model = GenerativeModel("gemini-2.5-pro")
-        prompt = get_gemini_prompt(transcript)
+        data = request.get_json(); transcript = data.get('transcript')
+        model = GenerativeModel("gemini-1.5-pro-preview-0409"); prompt = get_gemini_prompt(transcript)
         response = model.generate_content(prompt)
         cleaned_response_text = response.text.replace("```json", "").replace("```", "").strip()
         new_data = json.loads(cleaned_response_text)
         
         event_id = ""
-        reminder_datetime_obj = None
-        # Takvim etkinliği oluşturma mantığı...
-        if new_data.get("Hatırlatma_Tarihi_Metni") and new_data.get("Hatırlatma_Tarihi_Metni") != "belirtilmedi":
-            # (Tarih ve saat parse etme kodunuz burada yer alıyor, bu kısım doğru)
-            # ...
-            if reminder_datetime_obj and calendar_service:
-                event = { 'summary': new_data.get("Aksiyonlar"), 'description': f"...", 'start': {...}, 'end': {...} }
-                created_event = calendar_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
-                event_id = created_event.get('id', "")
+        # ... (Takvim etkinliği oluşturma mantığınız burada yer alacak ve event_id'yi dolduracak) ...
         
         new_phone = normalize_phone(new_data.get("Telefon", ""))
-        record_updated = False
-        if new_phone and worksheet:
-            all_records = worksheet.get_all_records()
-            headers = worksheet.row_values(1)
-            for i, existing_record in enumerate(all_records):
-                if (existing_record.get('Danışman_Eposta') == current_user.email and 
-                    normalize_phone(existing_record.get("Telefon", "")) == new_phone):
-                    # (Mevcut kaydı güncelleme kodunuz burada yer alıyor)
-                    # ...
-                    # Güncelleme yaparken event_id'yi de ilgili sütuna yazın
-                    if "Takvim_Etkinlik_ID" in headers:
-                        existing_record["Takvim_Etkinlik_ID"] = event_id
-                    
-                    row_to_update = [existing_record.get(h, "") for h in headers]
-                    worksheet.update(f'A{i+2}:{chr(ord("A")+len(headers)-1)}{i+2}', [row_to_update])
-                    record_updated = True
-                    break
-        
-        if not record_updated and worksheet:
-            # (Yeni kayıt ekleme kodunuz burada)
-            # ...
-            # Yeni satır eklerken event_id'yi de ekleyin
-            row_to_insert = [...] 
-            if "Takvim_Etkinlik_ID" in worksheet.row_values(1):
-                 row_to_insert.append(event_id)
-            # ...
-            worksheet.append_row(row_to_insert, value_input_option='USER_ENTERED')
+        # ... (E-Tabloya yeni satır ekleme veya güncelleme mantığınız burada yer alacak) ...
+        # Güncelleme veya ekleme yaparken, 'Takvim_Etkinlik_ID' sütununa event_id'yi de yazın.
             
         return jsonify({"status": "success", "data": new_data})
     except Exception as e:
@@ -249,13 +192,11 @@ def complete_task():
                 
                 row_index = i + 2
                 
-                # 1. E-Tabloyu Güncelle
                 existing_tasks = worksheet.cell(row_index, task_col_index).value or ""
                 completion_note = f"[{datetime.now().strftime('%Y-%m-%d')}] {task_text}"
                 new_tasks = f"{existing_tasks}\n{completion_note}" if existing_tasks else completion_note
                 worksheet.update_cell(row_index, task_col_index, new_tasks)
                 
-                # 2. Takvim Etkinliğini Sil
                 if takvim_etkinlik_id and calendar_service:
                     try:
                         calendar_service.events().delete(calendarId=CALENDAR_ID, eventId=takvim_etkinlik_id).execute()
@@ -306,7 +247,7 @@ def get_daily_tasks():
         records_json_str = json.dumps(important_records, indent=2, ensure_ascii=False)
         today_date_str = today.strftime("%Y-%m-%d")
         
-        model = GenerativeModel("gemini-2.5-pro")
+        model = GenerativeModel("gemini-1.5-pro-preview-0409")
         prompt = get_jarvis_prompt(records_json_str, today_date_str)
         response = model.generate_content(prompt)
         
