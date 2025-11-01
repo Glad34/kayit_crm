@@ -339,11 +339,12 @@ def get_jarvis_prompt(records_json, today_date):
     ## KESİN KURALLAR ##
     1.  **Bugünün Tarihi:** {today_date}
     2.  **Önceliklendirme Mantığı:**
-        *   **ACİL (Yüksek Öncelik):** Hatırlatma tarihi BUGÜN olan veya geçmişte kalmış (vadesi geçmiş) tüm görevler. Bunları listenin en başına koy. Örn: "VADESİ GEÇTİ: [Müşteri Adı]'nı ara."
-        *   **FIRSAT (Orta Öncelik):** Yeni eklenmiş (son 1-2 gün), bütçesi yüksek veya yatırım amaçlı müşterilere "Hoş geldin/Tanışma" araması öner. Örn: "YENİ MÜŞTERİ: [Müşteri Adı] ile ilk teması kur (Bütçe: [Bütçe])."
-        *   **TAKİP (Düşük Öncelik):** Bir süredir işlem görmemiş (örn: 1-2 haftadır yeni not eklenmemiş) müşterilere "hatır sorma" veya "yeni portföy var mı?" araması öner. Örn: "TAKİP ET: [Müşteri Adı]'nın arayışı ne durumda? Güncel bilgi al."
-        *   **GENEL (Düşük Öncelik):** Bütçesi belirtilmemiş veya notları eksik olan kayıtlar için bilgi tamamlama görevi öner. Örn: "BİLGİ GÜNCELLE: [Müşteri Adı]'nın bütçesini ve aradığı m2'yi netleştir."
-    3.  **Çıktı Formatı:** Cevabın SADECE aşağıdakine benzer bir JSON formatında olmalı. Her görev için bir 'task' (görev metni) ve bir 'priority' ('Yüksek', 'Orta', 'Düşük') alanı olmalı. Başka hiçbir açıklama, giriş veya sonuç cümlesi ekleme.
+        *   **ACİL (Yüksek Öncelik):** Hatırlatma tarihi BUGÜN olan veya geçmişte kalmış (vadesi geçmiş) tüm görevler.
+        *   **FIRSAT (Orta Öncelik):** Yeni eklenmiş, bütçesi yüksek veya yatırım amaçlı müşterilere "Hoş geldin/Tanışma" araması öner.
+        *   **TAKİP (Düşük Öncelik):** Bir süredir işlem görmemiş müşterilere "hatır sorma" araması öner.
+        *   **GENEL (Düşük Öncelik):** Bilgileri eksik kayıtlar için bilgi tamamlama görevi öner.
+    3.  **YENİ KURAL - TAMAMLANAN GÖREVLER:** Eğer bir müşterinin notlarında "Jarvis Görevi Tamamlandı" şeklinde yeni bir not varsa, o müşteriyle ilgili vadesi geçmiş aynı görevi TEKRAR ÖNERME. Bu, görevin yapıldığını gösterir. Bunun yerine, süreci bir adım ileri taşıyacak farklı bir görev önerebilirsin.
+    4.  **Çıktı Formatı:** Cevabın SADECE aşağıdakine benzer bir JSON formatında olmalı. Her görev için bir 'task' (görev metni), 'priority' ('Yüksek', 'Orta', 'Düşük') ve o görevle ilgili 'customer_name' (Müşteri Adı) alanı olmalı. Bu çok önemli! Başka hiçbir açıklama ekleme.
 
     İŞLENECEK VERİTABANI (JSON FORMATINDA):
     {records_json}
@@ -352,19 +353,13 @@ def get_jarvis_prompt(records_json, today_date):
     [
       {{
         "task": "VADESİ GEÇTİ: Sercan Bey'i mutlaka ara (Dünkü randevu için).",
-        "priority": "Yüksek"
-      }},
-      {{
-        "task": "BUGÜN ARANACAK: Ayşe Hanım'a saat 14:00'teki randevuyu teyit et.",
-        "priority": "Yüksek"
+        "priority": "Yüksek",
+        "customer_name": "Sercan Bey"
       }},
       {{
         "task": "YENİ FIRSAT: Yüksek bütçeli yeni müşteri Ali Veli ile tanışma araması yap.",
-        "priority": "Orta"
-      }},
-      {{
-        "task": "TAKİP ET: 2 haftadır haber alınamayan Zeynep Hanım'ın arayış durumunu sor.",
-        "priority": "Düşük"
+        "priority": "Orta",
+        "customer_name": "Ali Veli"
       }}
     ]
     """
@@ -407,5 +402,58 @@ def get_daily_tasks():
         return jsonify(error_task), 500
     
 
+
+
+@app.route('/complete_task', methods=['POST'])
+@login_required
+def complete_task():
+    data = request.get_json()
+    customer_name = data.get('customer_name')
+    task_text = data.get('task_text')
+
+    if not customer_name or not task_text or not worksheet:
+        return jsonify({"status": "error", "message": "Eksik bilgi."}), 400
+
+    try:
+        all_records = worksheet.get_all_records()
+        user_email = current_user.email
+        
+        # Güncellenecek doğru satırı ve sütunu bul
+        row_index_to_update = -1
+        notes_col_index = -1
+        
+        headers = worksheet.row_values(1)
+        try:
+            notes_col_index = headers.index("Notlar") + 1
+        except ValueError:
+            return jsonify({"status": "error", "message": "'Notlar' sütunu bulunamadı."}), 500
+
+        for i, record in enumerate(all_records):
+            if record.get('Danışman_Eposta') == user_email and record.get('Müşteri_Adı') == customer_name:
+                row_index_to_update = i + 2 # Liste indeksi 0'dan, e-tablo satırı 2'den başlar
+                break
+        
+        if row_index_to_update != -1:
+            # Mevcut notları al ve yenisini ekle
+            existing_notes = worksheet.cell(row_index_to_update, notes_col_index).value or ""
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+            completion_note = f"[{timestamp}] Jarvis Görevi Tamamlandı: '{task_text}'"
+            
+            if existing_notes:
+                new_notes = f"{existing_notes}\n---\n{completion_note}"
+            else:
+                new_notes = completion_note
+            
+            worksheet.update_cell(row_index_to_update, notes_col_index, new_notes)
+            return jsonify({"status": "success"})
+        else:
+            return jsonify({"status": "error", "message": "Müşteri bulunamadı."}), 404
+
+    except Exception as e:
+        print(f"Görev tamamlama hatası: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+    
+
+    
 if __name__ == '__main__':
     app.run(debug=True)
