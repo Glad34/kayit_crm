@@ -167,7 +167,7 @@ def service_worker():
 def process_transcript():
     # Bu fonksiyonun mantığı doğru çalıştığı için aynı bırakıyoruz.
     try:
-        data = request.get_json(); transcript = data.get('transcript'); model = GenerativeModel("gemini-1.5-pro-preview-0409"); prompt = get_gemini_prompt(transcript); response = model.generate_content(prompt); cleaned_response_text = response.text.replace("```json", "").replace("```", "").strip(); new_data = json.loads(cleaned_response_text); structured_data = new_data; new_phone = normalize_phone(new_data.get("Telefon", "")); record_updated = False
+        data = request.get_json(); transcript = data.get('transcript'); model = GenerativeModel("gemini-2.5-pro"); prompt = get_gemini_prompt(transcript); response = model.generate_content(prompt); cleaned_response_text = response.text.replace("```json", "").replace("```", "").strip(); new_data = json.loads(cleaned_response_text); structured_data = new_data; new_phone = normalize_phone(new_data.get("Telefon", "")); record_updated = False
         if new_phone and worksheet:
             all_records = worksheet.get_all_records(); user_records_with_index = [(i + 2, record) for i, record in enumerate(all_records) if record.get('Danışman_Eposta') == current_user.email]
             for row_index, existing_record in user_records_with_index:
@@ -279,7 +279,7 @@ def get_daily_tasks():
         records_json_str = json.dumps(important_records, indent=2, ensure_ascii=False)
         today_date_str = today.strftime("%Y-%m-%d")
         
-        model = GenerativeModel("gemini-1.5-pro-preview-0409")
+        model = GenerativeModel("gemini-2.5-pro")
         prompt = get_jarvis_prompt(records_json_str, today_date_str)
         response = model.generate_content(prompt)
         
