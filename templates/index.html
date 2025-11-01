@@ -602,21 +602,46 @@ if ("serviceWorker" in navigator) {
 
     // ... btnYes.addEventListener(...) fonksiyonunun bittiği yerin altına ekleyin ...
 
-    // --- JARVIS GÖREVLERİNİ ÇEKEN VE GÖSTEREN KOD ---
+   // --- GÜNCELLENMİŞ JARVIS KODU ---
     document.addEventListener('DOMContentLoaded', function() {
       const taskList = document.getElementById('jarvis-task-list');
       const loadingIndicator = document.getElementById('jarvis-loading');
 
+      // GÖREVİ TAMAMLAYIP SUNUCUYA BİLDİREN FONKSİYON
+      async function completeTask(customerName, taskText, checkboxElement) {
+        checkboxElement.disabled = true; // Tekrar tıklamayı önle
+        try {
+          const response = await fetch('/complete_task', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customer_name: customerName,
+              task_text: taskText
+            })
+          });
+
+          if (!response.ok) {
+            console.error('Görev tamamlama sunucuya gönderilemedi.');
+            // Hata durumunda checkbox'ı eski haline getir
+            checkboxElement.checked = false;
+            checkboxElement.disabled = false;
+            alert('Görev tamamlanamadı, lütfen sayfayı yenileyip tekrar deneyin.');
+          }
+          // Başarılı olursa, arayüzde kalıcı olarak işaretli kalır.
+        } catch (error) {
+          console.error('Görev tamamlama fetch hatası:', error);
+          checkboxElement.disabled = false;
+        }
+      }
+
       async function fetchDailyTasks() {
         try {
           const response = await fetch('/get_daily_tasks');
-          if (!response.ok) {
-            throw new Error('Sunucudan görevler alınamadı.');
-          }
+          if (!response.ok) { throw new Error('Sunucudan görevler alınamadı.'); }
           const tasks = await response.json();
 
           loadingIndicator.style.display = 'none';
-          taskList.innerHTML = ''; // Listeyi temizle
+          taskList.innerHTML = '';
 
           if (tasks.length === 0) {
             const li = document.createElement('li');
@@ -627,6 +652,10 @@ if ("serviceWorker" in navigator) {
 
           tasks.forEach((task, index) => {
             const li = document.createElement('li');
+            // Gerekli verileri 'data-' attribute'ları olarak sakla
+            li.dataset.customerName = task.customer_name;
+            li.dataset.taskText = task.task;
+
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.id = `task-${index}`;
@@ -635,7 +664,6 @@ if ("serviceWorker" in navigator) {
             label.htmlFor = `task-${index}`;
             label.textContent = task.task;
 
-            // Öncelik rozeti oluştur
             const priorityBadge = document.createElement('span');
             priorityBadge.textContent = task.priority;
             priorityBadge.className = `priority-badge priority-${task.priority}`;
@@ -644,8 +672,13 @@ if ("serviceWorker" in navigator) {
             li.appendChild(label);
             li.appendChild(priorityBadge);
 
+            // Checkbox'a tıklandığında yeni fonksiyonumuzu çağır
             checkbox.addEventListener('change', function() {
               li.classList.toggle('completed', this.checked);
+              if (this.checked) {
+                // Sadece işaretlendiğinde sunucuya bilgi gönder
+                completeTask(li.dataset.customerName, li.dataset.taskText, this);
+              }
             });
 
             taskList.appendChild(li);
