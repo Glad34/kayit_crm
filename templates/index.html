@@ -389,7 +389,12 @@ if ("serviceWorker" in navigator) {
     </div>
   </div>
 
+  <!-- FullCalendar JS (Bu script etiketi HTML'de kalmalı, JavaScript kodunun üstünde) -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.js"></script>
+
+  <!-- TÜM JAVASCRIPT KODLARINIZ İÇİN TEK VE BİRLEŞTİRİLMİŞ BLOK -->
   <script>
+    // === YARDIMCI FONKSİYONLAR (Sayfa yüklendiğinde hazır olmalı) ===
     function filterTable(tableId, columnIndex, inputElement) {
       const table = document.getElementById(tableId);
       const tr = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
@@ -402,6 +407,8 @@ if ("serviceWorker" in navigator) {
         }
       }
     }
+
+    // === SES TANIMA BÖLÜMÜ (Sayfa yüklendiğinde hazır olmalı) ===
     const micButton = document.getElementById('mic-button');
     const transcriptTextarea = document.getElementById('transcript-output');
     const confirmationButtons = document.getElementById('confirmation-buttons');
@@ -410,12 +417,14 @@ if ("serviceWorker" in navigator) {
     const statusMessage = document.getElementById('status-message');
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition;
+
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
       recognition.continuous = false;
       recognition.lang = 'tr-TR';
       recognition.interimResults = true;
       let isRecording = false;
+
       micButton.addEventListener('click', () => {
         isRecording = !isRecording;
         if (isRecording) {
@@ -430,6 +439,7 @@ if ("serviceWorker" in navigator) {
           micButton.classList.remove('recording');
         }
       });
+
       recognition.onresult = (event) => {
         let final_transcript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -438,11 +448,12 @@ if ("serviceWorker" in navigator) {
           }
         }
         if (final_transcript) {
-            transcriptTextarea.value += ' ' + final_transcript;
-            transcriptTextarea.value = transcriptTextarea.value.trim();
+          transcriptTextarea.value += ' ' + final_transcript;
+          transcriptTextarea.value = transcriptTextarea.value.trim();
         }
         transcriptTextarea.scrollTop = transcriptTextarea.scrollHeight;
       };
+
       recognition.onend = () => {
         if (isRecording) {
           recognition.start();
@@ -454,20 +465,23 @@ if ("serviceWorker" in navigator) {
           }
         }
       };
+      
       recognition.onerror = (event) => {
         console.error("Speech Recognition Error", event.error);
         isRecording = false;
         micButton.classList.remove('recording');
-      }
+      };
     } else {
       micButton.disabled = true;
-      transcriptTextarea.placeholder = "Tarayıcınız ses tanıma özelliğini desteklemiyor."
+      transcriptTextarea.placeholder = "Tarayıcınız ses tanıma özelliğini desteklemiyor.";
     }
+
     btnNo.addEventListener('click', () => {
       transcriptTextarea.value = '';
       transcriptTextarea.placeholder = 'İptal edildi. Tekrar denemek için mikrofona basın.';
       confirmationButtons.style.display = 'none';
     });
+
     btnYes.addEventListener('click', async () => {
       statusMessage.textContent = 'İşleniyor, lütfen bekleyin...';
       confirmationButtons.style.display = 'none';
@@ -490,134 +504,21 @@ if ("serviceWorker" in navigator) {
         statusMessage.textContent = 'Sunucuya bağlanırken bir hata oluştu.';
       }
     });
-  </script>
 
-  <!-- FullCalendar JS -->
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.js"></script>
-  <script>
+    // === SAYFA YÜKLENDİĞİNDE ÇALIŞACAK KODLAR (TEK VE BİRLEŞTİRİLMİŞ BLOK) ===
     document.addEventListener('DOMContentLoaded', function() {
-      const calendarEl = document.getElementById('calendar');
-
-      const calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',   // Ay görünümü varsayılan
-        locale: 'tr',
-        buttonText: {                  // Türkçe metinler
-          today: 'Bugün',
-          month: 'Ay',
-          week: 'Hafta',
-          day: 'Gün',
-          list: 'Liste'
-        },
-        height: 'auto',
-        contentHeight: 'auto',
-        expandRows: true,
-        dayMaxEvents: true,
-        aspectRatio: 1.35,
-        headerToolbar: {
-          left: 'prev,next today',
-          center: 'title',
-          right: 'dayGridMonth,timeGridWeek,listWeek'
-        },
-        events: [
-          {% for record in records %}
-            {% if record.get('Hatırlatma_Tarihi') and record.get('Hatırlatma_Tarihi') != 'Belirtilmedi' %}
-            {
-              title: '{{ (record.get("Aksiyonlar") or "Görev")|e }} - {{ (record.get("Müşteri_Adı") or "Müşteri")|e }}',
-              start: '{{ (record.get("Hatırlatma_Tarihi") or "")[:10] }}',
-              allDay: true,
-              extendedProps: {
-                musteri: '{{ (record.get("Müşteri_Adı") or "Belirtilmedi")|e }}',
-                telefon: '{{ (record.get("Telefon") or "Belirtilmedi")|e }}',
-                notlar:  '{{ (record.get("Notlar") or "Belirtilmedi")|e }}',
-                konum:   '{{ (record.get("Konum") or "Belirtilmedi")|e }}',
-                mahalle: '{{ (record.get("Mahalle") or "Belirtilmedi")|e }}'
-              }
-            },
-            {% endif %}
-          {% endfor %}
-        ],
-        eventColor: '#007bff',
-        eventTextColor: 'white',
-
-        /* Dokunmatik cihazlarda tıkla → bilgi göster */
-        eventClick: function(info) {
-          const e = info.event;
-          const lines = [
-            e.title,
-            'Müşteri: ' + (e.extendedProps.musteri || '-'),
-            'Telefon: ' + (e.extendedProps.telefon || '-'),
-            'Konum: ' + (e.extendedProps.konum || '-') + ' / ' + (e.extendedProps.mahalle || '-'),
-            'Not: ' + (e.extendedProps.notlar || '-')
-          ];
-          alert(lines.join('\n'));
-        },
-
-        /* Masaüstü için hover tooltip (dokunmatiklerde devre dışı) */
-        eventMouseEnter: function(info) {
-          if (matchMedia('(hover: hover)').matches === false) return;
-          const event = info.event;
-          const tooltip = document.createElement('div');
-          tooltip.classList.add('fc-tooltip');
-          tooltip.innerHTML = `
-            <strong>${event.title}</strong><br>
-            <b>Müşteri:</b> ${event.extendedProps.musteri}<br>
-            <b>Telefon:</b> ${event.extendedProps.telefon}<br>
-            <b>Konum:</b> ${event.extendedProps.konum} / ${event.extendedProps.mahalle}<br>
-            <b>Not:</b> ${event.extendedProps.notlar}
-          `;
-          document.body.appendChild(tooltip);
-          Object.assign(tooltip.style, {
-            position: 'absolute',
-            background: 'rgba(0,0,0,0.85)',
-            color: '#fff',
-            padding: '8px 12px',
-            borderRadius: '6px',
-            fontSize: '13px',
-            pointerEvents: 'none',
-            transition: '0.1s',
-            zIndex: 9999
-          });
-
-          const moveTooltip = (e) => {
-            tooltip.style.left = e.pageX + 10 + 'px';
-            tooltip.style.top = e.pageY + 10 + 'px';
-          };
-          moveTooltip(info.jsEvent);
-          document.addEventListener('mousemove', moveTooltip);
-
-          info.el.addEventListener('mouseleave', () => {
-            tooltip.remove();
-            document.removeEventListener('mousemove', moveTooltip);
-          }, { once: true });
-        }
-      });
-
-      calendar.render();
-    });
-
-
-
-
-
-
-    // ... btnYes.addEventListener(...) fonksiyonunun bittiği yerin altına ekleyin ...
-
-   // --- GÜNCELLENMİŞ JARVIS KODU ---
- document.addEventListener('DOMContentLoaded', function() {
+    
+      // --- BÖLÜM 1: JARVIS GÖREVLERİNİ ÇEKME ---
       const taskList = document.getElementById('jarvis-task-list');
       const loadingIndicator = document.getElementById('jarvis-loading');
 
       async function completeTask(telefon, taskText, takvimEtkinlikId, checkboxElement) {
-        checkboxElement.disabled = true; // Tekrar tıklamayı önle
+        checkboxElement.disabled = true;
         try {
           const response = await fetch('/complete_task', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              telefon: telefon,
-              task_text: taskText,
-              takvim_etkinlik_id: takvimEtkinlikId
-            })
+            body: JSON.stringify({ telefon: telefon, task_text: taskText, takvim_etkinlik_id: takvimEtkinlikId })
           });
 
           if (!response.ok) {
@@ -625,15 +526,15 @@ if ("serviceWorker" in navigator) {
             console.error('Görev tamamlama sunucuya gönderilemedi:', errorResult.message);
             checkboxElement.checked = false;
             checkboxElement.disabled = false;
-            alert('Görev tamamlanamadı: ' + errorResult.message);
+            alert('Görev tamamlanamadı: ' + (errorResult.message || 'Sunucu hatası. Lütfen konsolu kontrol edin.'));
           } else {
-            // Başarılı olursa, sayfayı yenileyerek güncel görevleri ve tabloları gör
-            alert('Görev tamamlandı ve bir sonraki adım planlandı. Sayfa yenileniyor...');
+            alert('Görev tamamlandı ve bir sonraki adım planlandı. Sayfa güncelleniyor...');
             setTimeout(() => { window.location.reload(); }, 1000);
           }
         } catch (error) {
           console.error('Görev tamamlama fetch hatası:', error);
           checkboxElement.disabled = false;
+          alert('Görev tamamlanırken bir bağlantı hatası oluştu.');
         }
       }
 
@@ -646,9 +547,9 @@ if ("serviceWorker" in navigator) {
           loadingIndicator.style.display = 'none';
           taskList.innerHTML = '';
 
-          if (!tasks || tasks.length === 0) {
+          if (!tasks || tasks.length === 0 || !tasks[0].task) {
             const li = document.createElement('li');
-            li.textContent = 'Bugün için planlanmış bir görev bulunamadı.';
+            li.textContent = 'Bugün için öncelikli bir görev bulunmuyor.';
             taskList.appendChild(li);
             return;
           }
@@ -681,7 +582,6 @@ if ("serviceWorker" in navigator) {
                 completeTask(li.dataset.telefon, li.dataset.taskText, li.dataset.takvimEtkinlikId, this);
               }
             });
-
             taskList.appendChild(li);
           });
         } catch (error) {
@@ -690,8 +590,47 @@ if ("serviceWorker" in navigator) {
         }
       }
 
-      fetchDailyTasks();
-    });
+      fetchDailyTasks(); // Jarvis görevlerini çekmeyi başlat
+
+      // --- BÖLÜM 2: FULLCALENDAR'I OLUŞTURMA ---
+      const calendarEl = document.getElementById('calendar');
+      const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'tr',
+        buttonText: { today: 'Bugün', month: 'Ay', week: 'Hafta', day: 'Gün', list: 'Liste' },
+        height: 'auto',
+        contentHeight: 'auto',
+        expandRows: true,
+        dayMaxEvents: true,
+        aspectRatio: 1.35,
+        headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' },
+        events: [
+          {% for record in records %}
+            {% if record.get('Hatırlatma_Tarihi') and record.get('Hatırlatma_Tarihi') != 'Belirtilmedi' %}
+            {
+              title: '{{ (record.get("Aksiyonlar") or "Görev")|e }} - {{ (record.get("Müşteri_Adı") or "Müşteri")|e }}',
+              start: '{{ (record.get("Hatırlatma_Tarihi") or "")[:20] }}',
+              allDay: false, // allDay: false yaparak saat bilgisini de dikkate almasını sağlıyoruz
+              extendedProps: {
+                musteri: '{{ (record.get("Müşteri_Adı") or "Belirtilmedi")|e }}',
+                telefon: '{{ (record.get("Telefon") or "Belirtilmedi")|e }}',
+                notlar: '{{ (record.get("Notlar") or "Belirtilmedi")|e }}'
+              }
+            },
+            {% endif %}
+          {% endfor %}
+        ],
+        eventColor: '#007bff',
+        eventTextColor: 'white',
+        eventClick: function(info) {
+          const e = info.event;
+          const lines = [e.title, 'Müşteri: ' + (e.extendedProps.musteri || '-'), 'Telefon: ' + (e.extendedProps.telefon || '-')];
+          alert(lines.join('\n'));
+        }
+      });
+
+      calendar.render(); // Takvimi ekranda çiz
+    }); // --- TEK DOMCONTENTLOADED BLOĞUNUN SONU ---
   </script>
 </body>
 </html>
