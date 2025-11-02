@@ -603,31 +603,34 @@ if ("serviceWorker" in navigator) {
     // ... btnYes.addEventListener(...) fonksiyonunun bittiği yerin altına ekleyin ...
 
    // --- GÜNCELLENMİŞ JARVIS KODU ---
-    document.addEventListener('DOMContentLoaded', function() {
+ document.addEventListener('DOMContentLoaded', function() {
       const taskList = document.getElementById('jarvis-task-list');
       const loadingIndicator = document.getElementById('jarvis-loading');
 
-      // GÖREVİ TAMAMLAYIP SUNUCUYA BİLDİREN FONKSİYON
-      async function completeTask(customerName, taskText, checkboxElement) {
+      async function completeTask(telefon, taskText, takvimEtkinlikId, checkboxElement) {
         checkboxElement.disabled = true; // Tekrar tıklamayı önle
         try {
           const response = await fetch('/complete_task', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              customer_name: customerName,
-              task_text: taskText
+              telefon: telefon,
+              task_text: taskText,
+              takvim_etkinlik_id: takvimEtkinlikId
             })
           });
 
           if (!response.ok) {
-            console.error('Görev tamamlama sunucuya gönderilemedi.');
-            // Hata durumunda checkbox'ı eski haline getir
+            const errorResult = await response.json();
+            console.error('Görev tamamlama sunucuya gönderilemedi:', errorResult.message);
             checkboxElement.checked = false;
             checkboxElement.disabled = false;
-            alert('Görev tamamlanamadı, lütfen sayfayı yenileyip tekrar deneyin.');
+            alert('Görev tamamlanamadı: ' + errorResult.message);
+          } else {
+            // Başarılı olursa, sayfayı yenileyerek güncel görevleri ve tabloları gör
+            alert('Görev tamamlandı ve bir sonraki adım planlandı. Sayfa yenileniyor...');
+            setTimeout(() => { window.location.reload(); }, 1000);
           }
-          // Başarılı olursa, arayüzde kalıcı olarak işaretli kalır.
         } catch (error) {
           console.error('Görev tamamlama fetch hatası:', error);
           checkboxElement.disabled = false;
@@ -643,7 +646,7 @@ if ("serviceWorker" in navigator) {
           loadingIndicator.style.display = 'none';
           taskList.innerHTML = '';
 
-          if (tasks.length === 0) {
+          if (!tasks || tasks.length === 0) {
             const li = document.createElement('li');
             li.textContent = 'Bugün için planlanmış bir görev bulunamadı.';
             taskList.appendChild(li);
@@ -652,9 +655,9 @@ if ("serviceWorker" in navigator) {
 
           tasks.forEach((task, index) => {
             const li = document.createElement('li');
-            // Gerekli verileri 'data-' attribute'ları olarak sakla
-            li.dataset.customerName = task.customer_name;
+            li.dataset.telefon = task.telefon;
             li.dataset.taskText = task.task;
+            li.dataset.takvimEtkinlikId = task.takvim_etkinlik_id;
 
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
@@ -672,18 +675,15 @@ if ("serviceWorker" in navigator) {
             li.appendChild(label);
             li.appendChild(priorityBadge);
 
-            // Checkbox'a tıklandığında yeni fonksiyonumuzu çağır
             checkbox.addEventListener('change', function() {
               li.classList.toggle('completed', this.checked);
               if (this.checked) {
-                // Sadece işaretlendiğinde sunucuya bilgi gönder
-                completeTask(li.dataset.customerName, li.dataset.taskText, this);
+                completeTask(li.dataset.telefon, li.dataset.taskText, li.dataset.takvimEtkinlikId, this);
               }
             });
 
             taskList.appendChild(li);
           });
-
         } catch (error) {
           loadingIndicator.textContent = 'Görevler yüklenirken bir hata oluştu.';
           console.error('Fetch Daily Tasks Error:', error);
