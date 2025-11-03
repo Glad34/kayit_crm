@@ -122,9 +122,7 @@ def get_jarvis_prompt(records_json, today_date):
 def get_follow_up_prompt(completed_task, customer_name):
     return f"""
     SENARYO: Sen bir gayrimenkul satış koçusun. Bir danışman, bir müşteriyle ilgili bir görevi yeni tamamladı. Senin görevin, bu duruma göre bir sonraki mantıklı adımı önermek.
-    
     TAMAMLANAN GÖREV: '{completed_task}' (Müşteri: {customer_name})
-    
     ## KURALLAR ##
     1.  Bir sonraki eylem için en mantıklı ve proaktif adımı düşün. (Örn: Rapor gönderildiyse 'Geri bildirim için ara', arama yapıldıysa 'Özet maili at' vb.)
     2.  Bu yeni eylem için bir hatırlatma tarihi öner. Genellikle 2-3 gün sonrası idealdir.
@@ -179,7 +177,7 @@ def process_transcript():
     try:
         data = request.get_json()
         transcript = data.get('transcript')
-        model = GenerativeModel("gemini-2.5-pro")
+        model = GenerativeModel("gemini-2.5-pro") # Model adı güncellendi
         prompt = get_gemini_prompt(transcript)
         response = model.generate_content(prompt)
         cleaned_response_text = response.text.replace("```json", "").replace("```", "").strip()
@@ -190,16 +188,29 @@ def process_transcript():
         reminder_date_text = new_data.get("Hatırlatma_Tarihi_Metni", "").lower()
         if reminder_date_text and reminder_date_text != "belirtilmedi":
             now = datetime.now()
-            # (Referans kodunuzdaki tam ve detaylı tarih parse etme mantığı buraya gelecek)
-            base_date = now # Varsayılan
+            base_date = now
             if "yarın" in reminder_date_text: base_date = now + timedelta(days=1)
-            # ... diğer if/elif blokları ...
+            elif "bugün" in reminder_date_text: base_date = now
+            elif "gün sonra" in reminder_date_text:
+                try: base_date = now + timedelta(days=int(''.join(filter(str.isdigit, reminder_date_text))))
+                except: pass
+            elif "hafta sonra" in reminder_date_text:
+                try: base_date = now + timedelta(weeks=int(''.join(filter(str.isdigit, reminder_date_text))))
+                except: pass
+            elif "ay sonra" in reminder_date_text:
+                try: base_date = now + relativedelta(months=int(''.join(filter(str.isdigit, reminder_date_text))))
+                except: pass
             else:
                 try: base_date = parse(reminder_date_text, default=now, dayfirst=True)
-                except: base_date = now
+                except: pass
             
             hour, minute = 10, 0
-            # ... saat parse etme ...
+            reminder_time_text = new_data.get("Hatırlatma_Saati_Metni", "").lower()
+            if reminder_time_text and reminder_time_text != "belirtilmedi":
+                try:
+                    time_parts = reminder_time_text.split(':')
+                    hour = int(time_parts[0]); minute = int(time_parts[1]) if len(time_parts) > 1 else 0
+                except: pass
             reminder_datetime_obj = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
         if reminder_datetime_obj and calendar_service:
@@ -239,7 +250,8 @@ def process_transcript():
             new_data['Hatırlatma_Tarihi'] = reminder_datetime_obj.strftime("%Y-%m-%d %H:%M") if reminder_datetime_obj else ""
             new_data['Takvim_Etkinlik_ID'] = event_id
             
-            row_to_insert = [new_data.get(h, "") for h in headers]
+            # --- DİNAMİK SATIR OLUŞTURMA (HATAYI ÇÖZEN BÖLÜM) ---
+            row_to_insert = [new_data.get(h, "Belirtilmedi") for h in headers]
             worksheet.append_row(row_to_insert, value_input_option='USER_ENTERED')
             
         return jsonify({"status": "success", "data": new_data})
@@ -285,7 +297,7 @@ def complete_task():
                         if e.resp.status == 404: print(f"Takvim etkinliği ({takvim_etkinlik_id}) zaten silinmiş.")
                         else: raise e
                 
-                model = GenerativeModel("gemini-2.5-pro")
+                model = GenerativeModel("gemini-2.5-pro") # Model adı güncellendi
                 prompt = get_follow_up_prompt(task_text, record.get("Müşteri_Adı", ""))
                 response = model.generate_content(prompt)
                 follow_up_data = json.loads(response.text.replace("```json", "").replace("```", "").strip())
@@ -343,7 +355,7 @@ def get_daily_tasks():
         records_json_str = json.dumps(important_records, indent=2, ensure_ascii=False)
         today_date_str = today.strftime("%Y-%m-%d")
         
-        model = GenerativeModel("gemini-2.5-pro")
+        model = GenerativeModel("gemini-2.5-pro") # Model adı güncellendi
         prompt = get_jarvis_prompt(records_json_str, today_date_str)
         response = model.generate_content(prompt)
         
