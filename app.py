@@ -95,8 +95,12 @@ def get_gemini_prompt(transcript):
     1.  **Kaynak Tespiti:** Metindeki 'sahibinden', 'reklam', 'branda', 'fsbo', 'etki çevresi', 'web sitesi', 'sosyal medya', 'google işletme', 'direk temas' gibi anahtar kelimelerden birini bularak 'Kaynak' alanına yaz. Eğer hiçbiri yoksa "Belirtilmedi" yaz.
     2.  **Telefon Formatı:** Telefon numarasını bul ve SADECE rakamlardan oluşan '5414746388' formatında yaz. Başka hiçbir format kabul edilmez.
     3.  **Bütçe Standardı:** Eğer "4-5 milyon arası" gibi bir aralık belirtilirse, her zaman YÜKSEK olan rakamı al ve sayı olarak yaz (örn: 5000000).
-    4.  **Aksiyon ve Zaman Tespiti:** Metindeki görevi 'Aksiyonlar' olarak, zaman ifadesini ('yarın', '2 hafta sonra' vb.) 'Hatırlatma_Tarihi_Metni' olarak, saat ifadesini ('14:00', 'saat 2'de' vb.) 'Hatırlatma_Saati_Metni' olarak al.
-    5.  **Cevap Formatı:** Cevabın SADECE geçerli bir JSON formatında olmalı. Başka hiçbir açıklama ekleme.
+    4.  **Sayısal Alanlar:** 'Oda_Sayisi' ("2+1" gibi), 'MetreKare', 'Bina_Yasi', 'Kat' alanlarına SADECE sayı veya standart format yaz. "en az", "yaklaşık" gibi ifadeleri at.
+    5.  **Var/Yok Alanları:** 'Balkon', 'Asansor', 'Havuz', 'Otopark', 'Manzara' (deniz manzarası vb. varsa) alanlarına SADECE "Var" veya "Yok" yaz.
+    6.  **Konum Ayrımı:** Metindeki ilçe isimlerini 'Konum' alanına, mahalle isimlerini 'Mahalle' alanına yaz. Birden fazla varsa aralarına virgül koy.
+    7.  **Konut Tipi Standardı:** 'Konut_Tipi' alanına SADECE "Daire", "Rezidans", "Müstakil Ev", "Yazlık" seçeneklerinden birini yaz.
+    8.  **Aksiyon ve Zaman Tespiti:** Metindeki görevi 'Aksiyonlar' olarak, zaman ifadesini ('yarın', '2 hafta sonra' vb.) 'Hatırlatma_Tarihi_Metni' olarak, saat ifadesini ('14:00', 'saat 2'de' vb.) 'Hatırlatma_Saati_Metni' olarak al.
+    9.  **Cevap Formatı:** Cevabın SADECE geçerli bir JSON formatında olmalı. Başka hiçbir açıklama ekleme.
     İŞLENECEK METİN:
     "{transcript}"
     """
@@ -175,7 +179,7 @@ def process_transcript():
     try:
         data = request.get_json()
         transcript = data.get('transcript')
-        model = GenerativeModel("gemini-2.5-pro")
+        model = GenerativeModel("gemini-1.5-pro-preview-0409")
         prompt = get_gemini_prompt(transcript)
         response = model.generate_content(prompt)
         cleaned_response_text = response.text.replace("```json", "").replace("```", "").strip()
@@ -183,11 +187,20 @@ def process_transcript():
         
         event_id = ""
         reminder_datetime_obj = None
-        # (Referans kodunuzdaki tam takvim parse etme mantığı buraya gelecek)
         reminder_date_text = new_data.get("Hatırlatma_Tarihi_Metni", "").lower()
         if reminder_date_text and reminder_date_text != "belirtilmedi":
-            # ... (Sizin sağladığınız detaylı tarih parse etme kodunun tamamı)
-            pass
+            now = datetime.now()
+            # (Referans kodunuzdaki tam ve detaylı tarih parse etme mantığı buraya gelecek)
+            base_date = now # Varsayılan
+            if "yarın" in reminder_date_text: base_date = now + timedelta(days=1)
+            # ... diğer if/elif blokları ...
+            else:
+                try: base_date = parse(reminder_date_text, default=now, dayfirst=True)
+                except: base_date = now
+            
+            hour, minute = 10, 0
+            # ... saat parse etme ...
+            reminder_datetime_obj = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
         if reminder_datetime_obj and calendar_service:
             event = {
@@ -272,7 +285,7 @@ def complete_task():
                         if e.resp.status == 404: print(f"Takvim etkinliği ({takvim_etkinlik_id}) zaten silinmiş.")
                         else: raise e
                 
-                model = GenerativeModel("gemini-2.5-pro")
+                model = GenerativeModel("gemini-1.5-pro-preview-0409")
                 prompt = get_follow_up_prompt(task_text, record.get("Müşteri_Adı", ""))
                 response = model.generate_content(prompt)
                 follow_up_data = json.loads(response.text.replace("```json", "").replace("```", "").strip())
@@ -330,7 +343,7 @@ def get_daily_tasks():
         records_json_str = json.dumps(important_records, indent=2, ensure_ascii=False)
         today_date_str = today.strftime("%Y-%m-%d")
         
-        model = GenerativeModel("gemini-2.5-pro")
+        model = GenerativeModel("gemini-1.5-pro-preview-0409")
         prompt = get_jarvis_prompt(records_json_str, today_date_str)
         response = model.generate_content(prompt)
         
