@@ -179,7 +179,7 @@ def process_transcript():
     try:
         data = request.get_json()
         transcript = data.get('transcript')
-        model = GenerativeModel("gemini-1.5-pro-preview-0409")
+        model = GenerativeModel("gemini-2.5-pro")
         prompt = get_gemini_prompt(transcript)
         response = model.generate_content(prompt)
         cleaned_response_text = response.text.replace("```json", "").replace("```", "").strip()
@@ -285,7 +285,7 @@ def complete_task():
                         if e.resp.status == 404: print(f"Takvim etkinliği ({takvim_etkinlik_id}) zaten silinmiş.")
                         else: raise e
                 
-                model = GenerativeModel("gemini-1.5-pro-preview-0409")
+                model = GenerativeModel("gemini-2.5-pro")
                 prompt = get_follow_up_prompt(task_text, record.get("Müşteri_Adı", ""))
                 response = model.generate_content(prompt)
                 follow_up_data = json.loads(response.text.replace("```json", "").replace("```", "").strip())
@@ -343,7 +343,7 @@ def get_daily_tasks():
         records_json_str = json.dumps(important_records, indent=2, ensure_ascii=False)
         today_date_str = today.strftime("%Y-%m-%d")
         
-        model = GenerativeModel("gemini-1.5-pro-preview-0409")
+        model = GenerativeModel("gemini-2.5-pro")
         prompt = get_jarvis_prompt(records_json_str, today_date_str)
         response = model.generate_content(prompt)
         
